@@ -35,7 +35,13 @@ class MusicBot(commands.Bot):
         password = os.getenv("LAVALINK_PASSWORD", "youshallnotpass")
         uri = f"http://{host}:{port}"
 
-        nodes = [wavelink.Node(uri=uri, password=password)]
+        nodes = [
+            wavelink.Node(
+                uri=uri,
+                password=password,
+                inactive_player_timeout=180,
+            )
+        ]
         await wavelink.Pool.connect(nodes=nodes, client=self, cache_capacity=100)
 
         await self.load_extension("bot.cogs.music")

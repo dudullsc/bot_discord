@@ -166,6 +166,22 @@ class Music(commands.Cog):
                 return
 
     @commands.Cog.listener()
+    async def on_wavelink_inactive_player(self, player: wavelink.Player) -> None:
+        if player.playing:
+            return
+        channel = player.channel
+        try:
+            await player.disconnect()
+        except Exception:
+            return
+        if channel is None:
+            return
+        try:
+            await channel.send("Fiquei parado e saí da voz, seu Macaco!")
+        except Exception:
+            return
+
+    @commands.Cog.listener()
     async def on_wavelink_track_exception(self, payload: object) -> None:
         player = getattr(payload, "player", None)
         channel = getattr(player, "channel", None) if player is not None else None
