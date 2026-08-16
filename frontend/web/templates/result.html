@@ -3,129 +3,164 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{% if ok %}Sucesso{% else %}Erro{% endif %} — music</title>
+  <title>{% if ok %}Missao concluida{% else %}Missao falhou{% endif %} - music quest</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Bungee:wght@400&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --ink: #0f2a2e;
-      --muted: #3d5a60;
-      --surface: #f3faf8;
-      --teal: #0d8a7c;
-      --teal-deep: #06665c;
-      --amber: #e8a317;
-      --ok: #0d8a7c;
-      --bad: #b33a2b;
+      --bg: #0b1327;
+      --bg2: #182a57;
+      --card: rgba(8, 15, 33, 0.84);
+      --line: rgba(160, 196, 255, 0.28);
+      --text: #edf3ff;
+      --muted: #afc2e5;
+      --ok: #5cf0b8;
+      --bad: #ff6e6e;
+      --gold: #ffbf4d;
+      --btn: #2a90ff;
+      --btn2: #0b5dd2;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
       min-height: 100vh;
-      font-family: "Outfit", sans-serif;
-      color: var(--ink);
+      font-family: "Rajdhani", sans-serif;
+      color: var(--text);
       background:
-        radial-gradient(ellipse 90% 70% at 10% 0%, rgba(13, 138, 124, 0.18), transparent 55%),
-        radial-gradient(ellipse 70% 50% at 95% 85%, rgba(232, 163, 23, 0.28), transparent 50%),
-        linear-gradient(165deg, #e8f6f3 0%, var(--surface) 45%, #fff8eb 100%);
+        radial-gradient(circle at 15% 20%, rgba(92, 240, 184, 0.14), transparent 35%),
+        radial-gradient(circle at 82% 16%, rgba(255, 191, 77, 0.14), transparent 35%),
+        linear-gradient(160deg, var(--bg) 0%, var(--bg2) 60%, #20396e 100%);
       display: grid;
       place-items: center;
-      padding: 2rem 1.25rem;
+      padding: 1.2rem;
     }
 
-    main {
+    .card {
       width: min(100%, 34rem);
+      border: 1px solid var(--line);
+      border-radius: 1rem;
+      background: var(--card);
+      box-shadow: 0 18px 45px rgba(0, 0, 0, 0.35);
+      padding: 1.2rem;
       text-align: center;
-      animation: rise 0.55s ease-out both;
+      animation: rise 0.65s ease both;
     }
 
     @keyframes rise {
-      from { opacity: 0; transform: translateY(0.75rem); }
+      from { opacity: 0; transform: translateY(14px); }
       to { opacity: 1; transform: translateY(0); }
     }
 
     .brand {
-      font-family: "Fraunces", Georgia, serif;
-      font-weight: 700;
-      font-size: 2rem;
-      letter-spacing: -0.03em;
-      margin-bottom: 1.5rem;
-    }
-
-    .brand span {
-      background: linear-gradient(120deg, var(--teal-deep), var(--teal) 50%, var(--amber));
-      -webkit-background-clip: text;
-      background-clip: text;
-      color: transparent;
+      font-family: "Bungee", cursive;
+      color: var(--gold);
+      font-size: clamp(1.7rem, 8vw, 2.5rem);
+      margin-bottom: 0.9rem;
     }
 
     .status {
-      display: inline-block;
-      width: 0.65rem;
-      height: 0.65rem;
-      border-radius: 50%;
-      margin-bottom: 1rem;
+      width: 0.8rem;
+      height: 0.8rem;
+      border-radius: 999px;
+      margin: 0 auto 0.65rem;
       background: {% if ok %}var(--ok){% else %}var(--bad){% endif %};
-      box-shadow: 0 0 0 6px {% if ok %}rgba(13, 138, 124, 0.2){% else %}rgba(179, 58, 43, 0.15){% endif %};
-      animation: pulse 1.4s ease-in-out infinite;
+      box-shadow: 0 0 14px {% if ok %}rgba(92, 240, 184, 0.9){% else %}rgba(255, 110, 110, 0.9){% endif %};
+      animation: pulse 1.3s ease-in-out infinite;
     }
 
     @keyframes pulse {
       0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.15); }
+      50% { transform: scale(1.2); }
     }
 
     h1 {
-      font-family: "Fraunces", Georgia, serif;
-      font-weight: 600;
-      font-size: 1.65rem;
-      margin-bottom: 0.75rem;
+      font-size: 1.75rem;
+      margin-bottom: 0.5rem;
     }
 
     p {
       color: var(--muted);
-      line-height: 1.55;
-      margin-bottom: 1.75rem;
+      line-height: 1.5;
+      font-size: 1.05rem;
+    }
+
+    .message { margin-bottom: 0.95rem; }
+
+    .guide {
+      text-align: left;
+      border: 1px solid var(--line);
+      border-radius: 0.75rem;
+      background: rgba(4, 10, 26, 0.74);
+      padding: 0.78rem;
+      margin: 0.85rem 0 1rem;
+      display: grid;
+      gap: 0.35rem;
+    }
+
+    .guide strong {
+      font-size: 0.98rem;
+      color: #fff;
     }
 
     code {
-      font-size: 0.9em;
-      padding: 0.15em 0.4em;
-      border-radius: 0.3em;
-      background: rgba(15, 42, 46, 0.06);
-      color: var(--ink);
+      border: 1px solid rgba(160, 196, 255, 0.28);
+      background: rgba(4, 10, 24, 0.85);
+      border-radius: 0.35rem;
+      padding: 0.05rem 0.34rem;
+      color: #d8e6ff;
+      font-size: 0.95em;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.55rem;
+      margin-top: 0.45rem;
     }
 
     a {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 0.85rem 1.5rem;
-      font-weight: 600;
-      color: #fff;
       text-decoration: none;
-      background: linear-gradient(135deg, var(--teal), var(--teal-deep));
-      border-radius: 999px;
-      transition: transform 0.2s ease, filter 0.2s ease;
+      color: #fff;
+      font-weight: 700;
+      border-radius: 0.7rem;
+      padding: 0.68rem 1rem;
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      background: linear-gradient(145deg, var(--btn), var(--btn2));
+      transition: transform 0.2s ease;
     }
 
-    a:hover {
-      transform: translateY(-2px);
-      filter: brightness(1.05);
+    a.secondary { background: rgba(255, 255, 255, 0.08); }
+    a:hover { transform: translateY(-2px); }
+
+    @media (max-width: 640px) {
+      .actions { align-items: stretch; }
+      a { width: 100%; }
     }
   </style>
 </head>
 <body>
-  <main>
-    <p class="brand"><span>music</span></p>
+  <main class="card">
+    <p class="brand">MUSIC QUEST</p>
     <div class="status" aria-hidden="true"></div>
     <h1>{{ title }}</h1>
-    <p>{{ message }}</p>
+    <p class="message">{{ message }}</p>
+
     {% if guild_id %}
-    <p><code>{{ guild_id }}</code></p>
+    <div class="guide">
+      <strong>Servidor registrado:</strong>
+      <p><code>{{ guild_id }}</code></p>
+      <p>Proximo passo: entre no Discord e execute <code>/play</code> para iniciar a musica.</p>
+      <p>Comandos uteis: <code>/queue</code>, <code>/skip</code>, <code>/leave</code>.</p>
+    </div>
     {% endif %}
-    <a href="{{ home_url or url_for('index') }}">Voltar</a>
+
+    <div class="actions">
+      <a href="{{ home_url or url_for('index') }}">Voltar ao hub</a>
+      <a class="secondary" href="{{ url_for('dashboard') }}">Abrir painel</a>
+    </div>
   </main>
 </body>
 </html>
