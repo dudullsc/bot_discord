@@ -18,6 +18,8 @@ spec:
     metadata:
       labels:
         app: lavalink
+      annotations:
+        checksum/lavalink-config: "spotify-partner-api"
     spec:
       priorityClassName: pc-6-apps-priority
       containers:

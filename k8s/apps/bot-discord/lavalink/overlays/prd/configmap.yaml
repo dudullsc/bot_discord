@@ -59,6 +59,7 @@ data:
           countryCode: "BR"
           playlistLoadLimit: 6
           albumLoadLimit: 6
+          preferPartnerApi: true
       youtube:
         enabled: true
         allowSearch: true
