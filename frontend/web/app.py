@@ -69,26 +69,32 @@ def build_invite_url() -> str | None:
 
 
 def update_guild_id(guild_id: str) -> None:
-    """Set or replace DISCORD_GUILD_ID in the project .env file."""
+    """Persist DISCORD_GUILD_ID in process env; also write .env when possible.
+
+    In Kubernetes the filesystem is usually read-only — update the SealedSecret
+    (and restart the bot) for a durable guild id.
+    """
     key = "DISCORD_GUILD_ID"
     line = f"{key}={guild_id}\n"
-
-    if ENV_PATH.exists():
-        text = ENV_PATH.read_text(encoding="utf-8")
-        pattern = re.compile(rf"^{re.escape(key)}=.*$", re.MULTILINE)
-        if pattern.search(text):
-            text = pattern.sub(f"{key}={guild_id}", text)
-            if not text.endswith("\n"):
-                text += "\n"
-        else:
-            if text and not text.endswith("\n"):
-                text += "\n"
-            text += line
-        ENV_PATH.write_text(text, encoding="utf-8")
-    else:
-        ENV_PATH.write_text(line, encoding="utf-8")
-
     os.environ[key] = guild_id
+
+    try:
+        if ENV_PATH.exists():
+            text = ENV_PATH.read_text(encoding="utf-8")
+            pattern = re.compile(rf"^{re.escape(key)}=.*$", re.MULTILINE)
+            if pattern.search(text):
+                text = pattern.sub(f"{key}={guild_id}", text)
+                if not text.endswith("\n"):
+                    text += "\n"
+            else:
+                if text and not text.endswith("\n"):
+                    text += "\n"
+                text += line
+            ENV_PATH.write_text(text, encoding="utf-8")
+        else:
+            ENV_PATH.write_text(line, encoding="utf-8")
+    except OSError:
+        pass
 
 
 @app.get("/")
@@ -176,12 +182,19 @@ def callback():
         ok=True,
         title="Bot adicionado",
         message=(
-            f"Servidor conectado. DISCORD_GUILD_ID={guild_id} foi salvo no .env. "
-            "Se o bot já estiver rodando, ele aparece no painel em instantes."
+            f"Servidor conectado. DISCORD_GUILD_ID={guild_id}. "
+            "Em Kubernetes, grave esse id no SealedSecret do bot e reinicie o "
+            "Deployment para sincronizar os slash commands. Localmente o valor "
+            "também é gravado no .env quando o arquivo for gravável."
         ),
         guild_id=guild_id,
         home_url=url_for("dashboard"),
     )
+
+
+@app.get("/health")
+def health():
+    return jsonify({"status": "ok"})
 
 
 def _safe_status() -> dict:
@@ -207,7 +220,7 @@ def create_app() -> Flask:
 
 
 def main() -> None:
-    host = os.getenv("WEB_HOST", "127.0.0.1").strip() or "127.0.0.1"
+    host = os.getenv("WEB_HOST", "0.0.0.0").strip() or "0.0.0.0"
     port = int(os.getenv("WEB_PORT", "8080") or "8080")
     try:
         db.ensure_schema()

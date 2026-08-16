@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: bot-discord
+
+resources:
+  - ../../base
+  - externalsecret.yaml
+  - sealedsecret.yaml
+  # Descomente após selar o pull secret (ver ghcr-pull-secret.yaml.example):
+  # - ghcr-pull-sealedsecret.yaml
+
+patches:
+  - target:
+      kind: Deployment
+      name: bot-discord-bot
+    path: deployment.yaml

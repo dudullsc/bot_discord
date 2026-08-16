@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lavalink
+  namespace: bot-discord
+  labels:
+    app: lavalink
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: lavalink
+  template:
+    metadata:
+      labels:
+        app: lavalink
+    spec:
+      priorityClassName: pc-6-apps-priority
+      containers:
+        - name: lavalink
+          image: ghcr.io/lavalink-devs/lavalink:4-alpine
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: _JAVA_OPTIONS
+              value: -Xmx512M
+          ports:
+            - name: http
+              containerPort: 2333
+              protocol: TCP
+          volumeMounts:
+            - name: config
+              mountPath: /opt/Lavalink/application.yml
+              subPath: application.yml
+            - name: plugins
+              mountPath: /opt/Lavalink/plugins
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 8
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 45
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            limits:
+              memory: 1Gi
+      volumes:
+        - name: config
+          secret:
+            secretName: lavalink-config
+        - name: plugins
+          emptyDir: {}

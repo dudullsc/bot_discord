@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bot-discord-bot
+  namespace: bot-discord
+  labels:
+    app: bot-discord-bot
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: bot-discord-bot
+  template:
+    metadata:
+      labels:
+        app: bot-discord-bot
+    spec:
+      priorityClassName: pc-6-apps-priority
+      # imagePullSecrets:
+      #   - name: ghcr-pull-secret
+      containers:
+        - name: bot-discord-bot
+          image: placeholder
+          imagePullPolicy: Always
+          env:
+            - name: LAVALINK_HOST
+              value: lavalink
+            - name: LAVALINK_PORT
+              value: "2333"
+            - name: LAVALINK_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: bot-discord-app-config
+                  key: LAVALINK_PASSWORD
+            - name: DISCORD_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: bot-discord-app-config
+                  key: DISCORD_TOKEN
+            - name: DISCORD_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: bot-discord-app-config
+                  key: DISCORD_CLIENT_ID
+            - name: DISCORD_GUILD_ID
+              valueFrom:
+                secretKeyRef:
+                  name: bot-discord-app-config
+                  key: DISCORD_GUILD_ID
+          envFrom:
+            - secretRef:
+                name: bot-discord-db-credentials
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            runAsNonRoot: false

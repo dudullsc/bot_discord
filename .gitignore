@@ -1,6 +1,7 @@
 .env
 .venv/
 venv/
+.venv-1/
 __pycache__/
 *.py[cod]
 *.egg-info/
@@ -9,3 +10,9 @@ __pycache__/
 backend/lavalink/plugins/*
 !backend/lavalink/plugins/.gitkeep
 *.log
+
+# k8s plaintext secrets
+**/secret.yaml
+**/*-secret.yaml
+!**/secret.yaml.example
+!**/sealedsecret.yaml.example

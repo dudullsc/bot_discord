@@ -1,0 +1,6 @@
+# Secrets / local configuration
+**/*-secret.yaml
+**/secret.yaml
+!**/secret.yaml.example
+!**/sealedsecret.yaml.example
+!prd-pub.pem

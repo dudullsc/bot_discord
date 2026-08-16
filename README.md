@@ -120,6 +120,29 @@ O bot grava no PostgreSQL: online/offline, heartbeat, uptime e lista de servidor
 3. `/play https://www.youtube.com/watch?v=dQw4w9WgXcQ`
 4. `/queue`, `/nowplaying`, `/skip`, `/volume 30`, `/loop`, `/stop`, `/leave`
 
+## Deploy Kubernetes (Kingnet)
+
+Mesmo modelo do `controle_contas`: manifests neste repo + Applications Argo no [`kingnet-k8s`](https://github.com/dudullsc/kingnet-k8s).
+
+| App Argo | Path | Namespace |
+|---|---|---|
+| `bot-discord-db` | `k8s/postgres/overlays/prd` | `bot-discord-db` |
+| `bot-discord-lavalink` | `k8s/apps/bot-discord/lavalink/overlays/prd` | `bot-discord` |
+| `bot-discord-bot` | `k8s/apps/bot-discord/bot/overlays/prd` | `bot-discord` |
+| `bot-discord-web` | `k8s/apps/bot-discord/web/overlays/prd` | `bot-discord` |
+
+- Painel: `https://bot-discord.kingbr.com.br`
+- Imagens: `ghcr.io/dudullsc/bot-discord-bot` e `bot-discord-web` (CI em `.github/workflows/build-images.yml`)
+
+Checklist pós-merge:
+1. DNS `bot-discord.kingbr.com.br` → `192.168.3.11`
+2. Discord OAuth2 Redirect: `https://bot-discord.kingbr.com.br/callback`
+3. Deploy key SSH do repo no Argo (`bot-discord-ssh` no `kingnet-k8s`)
+4. Push `main` para buildar imagens no GHCR
+5. (Se packages privadas) selar `ghcr-pull-secret` e descomentar no kustomize do bot
+
+Detalhes: [`k8s/README.md`](k8s/README.md).
+
 ## Rodar no VPS depois
 
 No servidor, clone o projeto, configure `.env`, suba o Docker (`cd backend && docker compose up -d`) e rode o bot (systemd, screen ou `cd backend && python -m bot`).
