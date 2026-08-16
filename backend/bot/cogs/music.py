@@ -11,6 +11,7 @@ from discord import app_commands
 from discord.ext import commands
 
 URL_RE = re.compile(r"https?://", re.IGNORECASE)
+SPOTIFY_URI_RE = re.compile(r"^spotify:", re.IGNORECASE)
 EMBED_COLOR = discord.Color.blurple()
 
 
@@ -65,30 +66,30 @@ class Music(commands.Cog):
         connect: bool = False,
     ) -> wavelink.Player | None:
         if interaction.guild is None:
-            await self._send(interaction, "Este comando só funciona em um servidor.")
+            await self._send(interaction, "Isso aqui só roda num servidor, seu Macaco!")
             return None
 
         player = self._player(interaction)
         member = interaction.user
         if not isinstance(member, discord.Member) or member.voice is None or member.voice.channel is None:
-            await self._send(interaction, "Entre em um canal de voz primeiro.")
+            await self._send(interaction, "Entra num canal de voz primeiro, seu Macaco!")
             return None
 
         channel = member.voice.channel
 
         if player is None:
             if not connect:
-                await self._send(interaction, "Não há nada tocando no momento.")
+                await self._send(interaction, "Nada tocando no momento, seu Macaco!")
                 return None
             try:
                 player = await channel.connect(cls=wavelink.Player, self_deaf=True, timeout=45)
             except discord.ClientException:
-                await self._send(interaction, "Não consegui entrar no canal de voz.")
+                await self._send(interaction, "Não consegui entrar na voz, seu Macaco!")
                 return None
             except Exception:
                 await self._send(
                     interaction,
-                    "Não consegui entrar no canal de voz. Confira se o bot pode Conectar e Falar nesse canal.",
+                    "Não consegui entrar na voz, seu Macaco! Me dá permissão de Conectar e Falar nesse canal.",
                 )
                 return None
             player.autoplay = wavelink.AutoPlayMode.partial
@@ -96,7 +97,7 @@ class Music(commands.Cog):
             if not connect:
                 await self._send(
                     interaction,
-                    f"Já estou em {player.channel.mention}. Entre nesse canal para controlar a música.",
+                    f"Já tô em {player.channel.mention}, seu Macaco! Entra nesse canal pra controlar a música.",
                 )
                 return None
             try:
@@ -104,14 +105,14 @@ class Music(commands.Cog):
             except Exception:
                 await self._send(
                     interaction,
-                    f"Não consegui ir para {channel.mention}. Confira se o bot pode Conectar e Falar nesse canal.",
+                    f"Não consegui ir pra {channel.mention}, seu Macaco! Me dá permissão de Conectar e Falar lá.",
                 )
                 return None
 
         return player
 
-    @app_commands.command(name="play", description="Toca uma música por link ou nome (YouTube)")
-    @app_commands.describe(query="Link do YouTube ou nome da música")
+    @app_commands.command(name="play", description="Toca uma música por link ou nome (YouTube/Spotify)")
+    @app_commands.describe(query="Link do YouTube/Spotify, playlist do Spotify, ou nome da música")
     async def play(self, interaction: discord.Interaction, query: str) -> None:
         await interaction.response.defer()
         player = await self._require_player(interaction, connect=True)
@@ -119,19 +120,19 @@ class Music(commands.Cog):
             return
 
         search_query = query.strip()
-        if not URL_RE.match(search_query):
+        if not URL_RE.match(search_query) and not SPOTIFY_URI_RE.match(search_query):
             search_query = f"ytsearch:{search_query}"
 
         try:
             tracks: wavelink.Search = await wavelink.Playable.search(search_query)
         except Exception:
             await interaction.followup.send(
-                "Falha ao buscar a música. Verifique se o Lavalink está online e tente de novo."
+                "Falha ao buscar a música, seu Macaco! Verifica se o link tá online e tenta de novo."
             )
             return
 
         if not tracks:
-            await interaction.followup.send("Nenhum resultado encontrado para essa busca.")
+            await interaction.followup.send("Não achei nada nessa busca, seu Macaco!")
             return
 
         if isinstance(tracks, wavelink.Playlist):
@@ -160,7 +161,7 @@ class Music(commands.Cog):
                 await player.play(player.queue.get(), volume=50)
             except Exception:
                 await interaction.followup.send(
-                    "Não consegui tocar essa faixa. O YouTube está bloqueando o áudio — tente outro vídeo."
+                    "Não consegui tocar essa faixa, seu Macaco! O YouTube tá bloqueando o áudio — tenta outro vídeo."
                 )
                 return
 
@@ -172,7 +173,7 @@ class Music(commands.Cog):
             return
         try:
             await channel.send(
-                "Não consegui reproduzir essa faixa. O YouTube recusou o áudio. Tente outro link."
+                "Não consegui reproduzir essa faixa, seu Macaco! O YouTube recusou o áudio. Tenta outro link."
             )
         except Exception:
             return
@@ -183,10 +184,10 @@ class Music(commands.Cog):
         if player is None:
             return
         if player.paused:
-            await interaction.response.send_message("Já está pausado.", ephemeral=True)
+            await interaction.response.send_message("Já tá pausado, seu Macaco!", ephemeral=True)
             return
         await player.pause(True)
-        await interaction.response.send_message("Pausado.")
+        await interaction.response.send_message("Pausado, seu Macaco!")
 
     @app_commands.command(name="resume", description="Continua a música pausada")
     async def resume(self, interaction: discord.Interaction) -> None:
@@ -194,10 +195,10 @@ class Music(commands.Cog):
         if player is None:
             return
         if not player.paused:
-            await interaction.response.send_message("Não está pausado.", ephemeral=True)
+            await interaction.response.send_message("Não tá pausado, seu Macaco!", ephemeral=True)
             return
         await player.pause(False)
-        await interaction.response.send_message("Continuando.")
+        await interaction.response.send_message("Continuando, seu Macaco!")
 
     @app_commands.command(name="skip", description="Pula a faixa atual")
     async def skip(self, interaction: discord.Interaction) -> None:
@@ -205,12 +206,12 @@ class Music(commands.Cog):
         if player is None:
             return
         if not player.playing:
-            await interaction.response.send_message("Nada tocando para pular.", ephemeral=True)
+            await interaction.response.send_message("Nada tocando pra pular, seu Macaco!", ephemeral=True)
             return
         current = player.current
         await player.skip(force=True)
         title = current.title if current else "faixa"
-        await interaction.response.send_message(f"Pulou **{title}**.")
+        await interaction.response.send_message(f"Pulei **{title}**, seu Macaco!")
 
     @app_commands.command(name="stop", description="Para a música e limpa a fila")
     async def stop(self, interaction: discord.Interaction) -> None:
@@ -219,13 +220,13 @@ class Music(commands.Cog):
             return
         player.queue.clear()
         await player.stop()
-        await interaction.response.send_message("Parado e fila limpa.")
+        await interaction.response.send_message("Parado e fila limpa, seu Macaco!")
 
     @app_commands.command(name="queue", description="Mostra a fila de músicas")
     async def queue(self, interaction: discord.Interaction) -> None:
         player = self._player(interaction)
         if player is None or (not player.playing and player.queue.is_empty):
-            await interaction.response.send_message("A fila está vazia.", ephemeral=True)
+            await interaction.response.send_message("A fila tá vazia, seu Macaco!", ephemeral=True)
             return
 
         embed = discord.Embed(title="Fila", color=EMBED_COLOR)
@@ -262,7 +263,7 @@ class Music(commands.Cog):
         if player is None:
             return
         await player.set_volume(int(level))
-        await interaction.response.send_message(f"Volume em **{level}%**.")
+        await interaction.response.send_message(f"Volume em **{level}%**, seu Macaco!")
 
     @app_commands.command(name="loop", description="Alterna o modo de loop (off → faixa → fila)")
     async def loop(self, interaction: discord.Interaction) -> None:
@@ -281,13 +282,13 @@ class Music(commands.Cog):
             player.queue.mode = wavelink.QueueMode.normal
             label = "desligado"
 
-        await interaction.response.send_message(f"Loop: **{label}**.")
+        await interaction.response.send_message(f"Loop: **{label}**, seu Macaco!")
 
     @app_commands.command(name="nowplaying", description="Mostra a música que está tocando")
     async def nowplaying(self, interaction: discord.Interaction) -> None:
         player = self._player(interaction)
         if player is None or player.current is None:
-            await interaction.response.send_message("Nada tocando no momento.", ephemeral=True)
+            await interaction.response.send_message("Nada tocando no momento, seu Macaco!", ephemeral=True)
             return
 
         track = player.current
@@ -311,7 +312,7 @@ class Music(commands.Cog):
             return
         player.queue.clear()
         await player.disconnect()
-        await interaction.response.send_message("Sai do canal de voz.")
+        await interaction.response.send_message("Sai da voz, seu Macaco!")
 
 
 async def setup(bot: commands.Bot) -> None:
