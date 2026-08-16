@@ -236,18 +236,6 @@
       font-size: 0.95rem;
     }
 
-    .footer-line {
-      margin-top: 0.8rem;
-      color: var(--muted);
-      font-size: 0.95rem;
-    }
-
-    .footer-line a {
-      color: var(--gold);
-      text-decoration: none;
-      font-weight: 700;
-    }
-
     .warn {
       color: #ffd5d5;
       border: 1px solid rgba(255, 110, 110, 0.45);
@@ -256,6 +244,29 @@
       padding: 0.75rem;
       margin-top: 0.7rem;
     }
+
+    .site-footer {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 3;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.92rem;
+      padding: 0.7rem 1rem;
+      background: rgba(5, 10, 24, 0.78);
+      border-top: 1px solid rgba(148, 188, 255, 0.25);
+      backdrop-filter: blur(3px);
+    }
+
+    .site-footer a {
+      color: var(--gold);
+      text-decoration: none;
+      font-weight: 700;
+    }
+
+    .site-footer a:hover { text-decoration: underline; }
 
     @media (max-width: 640px) {
       .hero { padding: 1.1rem; }
@@ -282,13 +293,10 @@
         {% else %}
         <a class="cta alt" href="#setup">Ver configuração</a>
         {% endif %}
-        <a class="cta alt" href="{{ url_for('dashboard') }}">Abrir painel ao vivo</a>
         <span class="hint">Uptime: <code>{% if status.online %}{{ uptime_label }}{% else %}offline{% endif %}</code></span>
       </div>
 
-      {% if invite_ready %}
-      <p class="footer-line">Redirect atual: <code>{{ redirect_uri }}</code></p>
-      {% else %}
+      {% if not invite_ready %}
       <p id="setup" class="warn">Defina <code>DISCORD_CLIENT_ID</code> no arquivo <code>.env</code> para habilitar o convite do bot.</p>
       {% endif %}
     </section>
@@ -322,10 +330,13 @@
           <p><span class="check">XP</span> Use títulos curtos no <code>/play</code> para achar rápido.</p>
           <p><span class="check">COMBO</span> Organize sequência com <code>/queue</code> antes de eventos.</p>
           <p><span class="check">TEAM</span> Faça moderação de voto para usar <code>/skip</code>.</p>
-          <p><span class="check">BOOST</span> Monitore tudo no painel em tempo real.</p>
+          <p><span class="check">BOOST</span> Use os comandos do hub para controlar a musica sem sair do Discord.</p>
         </div>
       </article>
     </section>
   </main>
+  <footer class="site-footer">
+    © {{ current_year }} Desenvolvedor Eduardo Lopes · <a href="https://github.com/dudullsc" target="_blank" rel="noopener noreferrer">GitHub</a>
+  </footer>
 </body>
 </html>

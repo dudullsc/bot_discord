@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 import sys
+from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -27,6 +28,11 @@ BOT_PERMISSIONS = 36_718_592
 OAUTH_SCOPES = "bot applications.commands"
 
 app = Flask(__name__)
+
+
+@app.context_processor
+def inject_template_globals() -> dict:
+    return {"current_year": datetime.now().year}
 
 
 def _reload_env() -> None:

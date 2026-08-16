@@ -227,6 +227,29 @@
       padding: 0.55rem;
     }
 
+    .site-footer {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 3;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.92rem;
+      padding: 0.7rem 1rem;
+      background: rgba(4, 10, 24, 0.8);
+      border-top: 1px solid rgba(160, 196, 255, 0.24);
+      backdrop-filter: blur(3px);
+    }
+
+    .site-footer a {
+      color: var(--gold);
+      text-decoration: none;
+      font-weight: 700;
+    }
+
+    .site-footer a:hover { text-decoration: underline; }
+
     @media (max-width: 860px) {
       .content { grid-template-columns: 1fr; }
     }
@@ -245,7 +268,7 @@
         </nav>
       </div>
       <h1>Painel de comando do servidor</h1>
-      <p class="lead">Atualizacao automatica a cada 30s para acompanhar uptime, heartbeat e base de servidores.</p>
+      <p class="lead">Atualizacao automatica a cada 30s para acompanhar uptime e heartbeat do bot.</p>
     </section>
 
     <section class="stats">
@@ -258,54 +281,12 @@
         <p class="value">{% if status.online %}{{ uptime_label }}{% else %}-{% endif %}</p>
       </article>
       <article class="stat">
-        <span class="label">servidores</span>
-        <p class="value">{{ status.guild_count or status.guilds|length }}</p>
-      </article>
-      <article class="stat">
         <span class="label">bot</span>
         <p class="value">{{ status.bot_username or "-" }}</p>
       </article>
     </section>
 
-    <section class="content">
-      <article class="panel">
-        <h2>Servidores conectados</h2>
-        {% if status.guilds %}
-        <table>
-          <thead>
-            <tr>
-              <th>Nome</th>
-              <th>Membros</th>
-              <th>ID</th>
-              <th>Ultima atividade</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for guild in status.guilds %}
-            <tr>
-              <td>{{ guild.name }}</td>
-              <td>{{ guild.member_count if guild.member_count is not none else "-" }}</td>
-              <td><code>{{ guild.guild_id }}</code></td>
-              <td>{{ guild.last_seen or "-" }}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-        {% else %}
-        <p class="empty">Nenhum servidor registrado ainda. Convide o bot para iniciar o rastreamento.</p>
-        {% endif %}
-        <p class="meta">
-          Banco: <code>{{ status.database }}</code>
-          {% if status.last_heartbeat %}
-          · Heartbeat: <code>{{ status.last_heartbeat }}</code>
-          {% endif %}
-        </p>
-        {% if status.error %}
-        <p class="warn">Erro ao consultar dados: {{ status.error }}</p>
-        {% endif %}
-      </article>
-
-      <aside class="panel">
+    <section class="panel">
         <h2>Menu rapido de comandos</h2>
         <div class="commands">
           <div class="cmd"><strong>/play termo</strong><span>Busca e toca a musica solicitada.</span></div>
@@ -321,8 +302,20 @@
           <p>2) Teste com uma faixa curta para validar audio e permissao.</p>
           <p>3) Em evento, monitore fila e heartbeat por este painel.</p>
         </div>
-      </aside>
+
+        <p class="meta">
+          Banco: <code>{{ status.database }}</code>
+          {% if status.last_heartbeat %}
+          · Heartbeat: <code>{{ status.last_heartbeat }}</code>
+          {% endif %}
+        </p>
+        {% if status.error %}
+        <p class="warn">Erro ao consultar dados: {{ status.error }}</p>
+        {% endif %}
     </section>
   </main>
+  <footer class="site-footer">
+    © {{ current_year }} Desenvolvedor Eduardo Lopes · <a href="https://github.com/dudullsc" target="_blank" rel="noopener noreferrer">GitHub</a>
+  </footer>
 </body>
 </html>
