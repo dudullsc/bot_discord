@@ -6,4 +6,4 @@ namespace: bot-discord
 resources:
   - service.yaml
   - deployment.yaml
-  - sealedsecret.yaml
+  - configmap.yaml

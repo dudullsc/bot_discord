@@ -27,6 +27,11 @@ spec:
           env:
             - name: _JAVA_OPTIONS
               value: -Xmx512M
+            - name: LAVALINK_SERVER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: bot-discord-app-config
+                  key: LAVALINK_PASSWORD
           ports:
             - name: http
               containerPort: 2333
@@ -59,7 +64,7 @@ spec:
               memory: 1Gi
       volumes:
         - name: config
-          secret:
-            secretName: lavalink-config
+          configMap:
+            name: lavalink-config
         - name: plugins
           emptyDir: {}

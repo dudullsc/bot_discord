@@ -1,0 +1,60 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lavalink-config
+  namespace: bot-discord
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+data:
+  application.yml: |
+    server:
+      port: 2333
+      address: 0.0.0.0
+
+    lavalink:
+      plugins:
+        - dependency: "dev.lavalink.youtube:youtube-plugin:1.18.2"
+          snapshot: false
+      server:
+        password: "unused-overridden-by-env"
+        sources:
+          youtube: false
+          bandcamp: true
+          soundcloud: true
+          twitch: true
+          vimeo: true
+          http: true
+          local: false
+        bufferDurationMs: 400
+        frameBufferDurationMs: 5000
+        trackStuckThresholdMs: 10000
+        youtubePlaylistLoadLimit: 6
+        playerUpdateInterval: 5
+        youtubeSearchEnabled: true
+        soundcloudSearchEnabled: true
+        gc-warnings: true
+
+    plugins:
+      youtube:
+        enabled: true
+        allowSearch: true
+        allowDirectVideoIds: true
+        allowDirectPlaylistIds: true
+        clients:
+          - MUSIC
+          - TVHTML5_SIMPLY
+          - MWEB
+          - ANDROID_MUSIC
+          - ANDROID_VR
+          - WEB
+        clientOptions:
+          MUSIC:
+            playback: false
+        oauth:
+          enabled: true
+
+    logging:
+      level:
+        root: INFO
+        lavalink: INFO
+        dev.lavalink.youtube.http.YoutubeOauth2Handler: INFO

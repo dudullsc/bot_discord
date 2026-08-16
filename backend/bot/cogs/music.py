@@ -93,11 +93,20 @@ class Music(commands.Cog):
                 return None
             player.autoplay = wavelink.AutoPlayMode.partial
         elif player.channel != channel:
-            await self._send(
-                interaction,
-                f"Já estou em {player.channel.mention}. Entre nesse canal para controlar a música.",
-            )
-            return None
+            if not connect:
+                await self._send(
+                    interaction,
+                    f"Já estou em {player.channel.mention}. Entre nesse canal para controlar a música.",
+                )
+                return None
+            try:
+                await player.move_to(channel)
+            except Exception:
+                await self._send(
+                    interaction,
+                    f"Não consegui ir para {channel.mention}. Confira se o bot pode Conectar e Falar nesse canal.",
+                )
+                return None
 
         return player
 
@@ -147,7 +156,26 @@ class Music(commands.Cog):
                 )
 
         if not player.playing:
-            await player.play(player.queue.get(), volume=50)
+            try:
+                await player.play(player.queue.get(), volume=50)
+            except Exception:
+                await interaction.followup.send(
+                    "Não consegui tocar essa faixa. O YouTube está bloqueando o áudio — tente outro vídeo."
+                )
+                return
+
+    @commands.Cog.listener()
+    async def on_wavelink_track_exception(self, payload: object) -> None:
+        player = getattr(payload, "player", None)
+        channel = getattr(player, "channel", None) if player is not None else None
+        if channel is None:
+            return
+        try:
+            await channel.send(
+                "Não consegui reproduzir essa faixa. O YouTube recusou o áudio. Tente outro link."
+            )
+        except Exception:
+            return
 
     @app_commands.command(name="pause", description="Pausa a música atual")
     async def pause(self, interaction: discord.Interaction) -> None:

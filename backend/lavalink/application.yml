@@ -33,16 +33,19 @@ plugins:
     allowDirectPlaylistIds: true
     clients:
       - MUSIC
+      - TVHTML5_SIMPLY
+      - MWEB
+      - ANDROID_MUSIC
       - ANDROID_VR
       - WEB
-      - WEBEMBEDDED
-    # Se o YouTube bloquear buscas ("sign in to confirm you're not a bot"),
-    # descomente oauth e siga o README:
-    # oauth:
-    #   enabled: true
-    #   # refreshToken: "cole_o_token_aqui"
+    clientOptions:
+      MUSIC:
+        playback: false
+    oauth:
+      enabled: true
 
 logging:
   level:
     root: INFO
     lavalink: INFO
+    dev.lavalink.youtube.http.YoutubeOauth2Handler: INFO
