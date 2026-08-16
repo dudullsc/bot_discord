@@ -46,6 +46,18 @@ class Music(commands.Cog):
             return None
         return cast(wavelink.Player | None, interaction.guild.voice_client)
 
+    async def _send(
+        self,
+        interaction: discord.Interaction,
+        content: str,
+        *,
+        ephemeral: bool = True,
+    ) -> None:
+        if interaction.response.is_done():
+            await interaction.followup.send(content, ephemeral=ephemeral)
+        else:
+            await interaction.response.send_message(content, ephemeral=ephemeral)
+
     async def _require_player(
         self,
         interaction: discord.Interaction,
@@ -53,43 +65,37 @@ class Music(commands.Cog):
         connect: bool = False,
     ) -> wavelink.Player | None:
         if interaction.guild is None:
-            await interaction.response.send_message(
-                "Este comando só funciona em um servidor.",
-                ephemeral=True,
-            )
+            await self._send(interaction, "Este comando só funciona em um servidor.")
             return None
 
         player = self._player(interaction)
         member = interaction.user
         if not isinstance(member, discord.Member) or member.voice is None or member.voice.channel is None:
-            await interaction.response.send_message(
-                "Entre em um canal de voz primeiro.",
-                ephemeral=True,
-            )
+            await self._send(interaction, "Entre em um canal de voz primeiro.")
             return None
 
         channel = member.voice.channel
 
         if player is None:
             if not connect:
-                await interaction.response.send_message(
-                    "Não há nada tocando no momento.",
-                    ephemeral=True,
-                )
+                await self._send(interaction, "Não há nada tocando no momento.")
                 return None
             try:
-                player = await channel.connect(cls=wavelink.Player, self_deaf=True)
+                player = await channel.connect(cls=wavelink.Player, self_deaf=True, timeout=15)
             except discord.ClientException:
-                await interaction.response.send_message(
-                    "Não consegui entrar no canal de voz.",
-                    ephemeral=True,
+                await self._send(interaction, "Não consegui entrar no canal de voz.")
+                return None
+            except Exception:
+                await self._send(
+                    interaction,
+                    "Não consegui entrar no canal de voz. Confira se o bot pode Conectar e Falar nesse canal.",
                 )
                 return None
             player.autoplay = wavelink.AutoPlayMode.partial
         elif player.channel != channel:
-            await interaction.response.send_message(
+            await self._send(
+                interaction,
                 f"Já estou em {player.channel.mention}. Entre nesse canal para controlar a música.",
-                ephemeral=True,
             )
             return None
 
@@ -98,11 +104,10 @@ class Music(commands.Cog):
     @app_commands.command(name="play", description="Toca uma música por link ou nome (YouTube)")
     @app_commands.describe(query="Link do YouTube ou nome da música")
     async def play(self, interaction: discord.Interaction, query: str) -> None:
+        await interaction.response.defer()
         player = await self._require_player(interaction, connect=True)
         if player is None:
             return
-
-        await interaction.response.defer()
 
         search_query = query.strip()
         if not URL_RE.match(search_query):

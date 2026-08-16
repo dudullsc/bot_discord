@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import os
-import re
 import sys
+import urllib.error
+import urllib.request
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlencode
@@ -68,33 +70,29 @@ def build_invite_url() -> str | None:
     return f"https://discord.com/api/oauth2/authorize?{query}"
 
 
-def update_guild_id(guild_id: str) -> None:
-    """Persist DISCORD_GUILD_ID in process env; also write .env when possible.
+def _guild_profile(guild_id: str) -> dict[str, str | None]:
+    """Resolve a friendly guild name/icon from Discord when the bot token is set."""
+    name = "seu servidor"
+    icon_url = None
+    token = os.getenv("DISCORD_TOKEN", "").strip()
+    if not token or token == "seu_token_aqui":
+        return {"name": name, "icon_url": icon_url}
 
-    In Kubernetes the filesystem is usually read-only — update the SealedSecret
-    (and restart the bot) for a durable guild id.
-    """
-    key = "DISCORD_GUILD_ID"
-    line = f"{key}={guild_id}\n"
-    os.environ[key] = guild_id
-
+    req = urllib.request.Request(
+        f"https://discord.com/api/v10/guilds/{guild_id}",
+        headers={"Authorization": f"Bot {token}"},
+    )
     try:
-        if ENV_PATH.exists():
-            text = ENV_PATH.read_text(encoding="utf-8")
-            pattern = re.compile(rf"^{re.escape(key)}=.*$", re.MULTILINE)
-            if pattern.search(text):
-                text = pattern.sub(f"{key}={guild_id}", text)
-                if not text.endswith("\n"):
-                    text += "\n"
-            else:
-                if text and not text.endswith("\n"):
-                    text += "\n"
-                text += line
-            ENV_PATH.write_text(text, encoding="utf-8")
-        else:
-            ENV_PATH.write_text(line, encoding="utf-8")
-    except OSError:
-        pass
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError):
+        return {"name": name, "icon_url": icon_url}
+
+    name = (data.get("name") or name).strip() or name
+    icon = data.get("icon")
+    if icon:
+        icon_url = f"https://cdn.discordapp.com/icons/{guild_id}/{icon}.png"
+    return {"name": name, "icon_url": icon_url}
 
 
 @app.get("/")
@@ -133,11 +131,8 @@ def invite():
         return render_template(
             "result.html",
             ok=False,
-            title="Configuração incompleta",
-            message=(
-                "Defina DISCORD_CLIENT_ID no arquivo .env "
-                "(ID do aplicativo no Developer Portal)."
-            ),
+            title="Convite indisponível",
+            message="O convite está temporariamente indisponível. Tente novamente em instantes.",
         ), 400
     return redirect(invite_url)
 
@@ -161,33 +156,34 @@ def callback():
             ok=False,
             title="Servidor não identificado",
             message=(
-                "O Discord não enviou um guild_id válido. "
-                "Confirme o Redirect em OAuth2 e tente de novo."
+                "Não foi possível identificar o servidor. "
+                "Tente adicionar o bot novamente."
             ),
         ), 400
 
-    update_guild_id(guild_id)
+    profile = _guild_profile(guild_id)
     try:
         db.upsert_guild(
             guild_id=guild_id,
-            name=f"Servidor {guild_id}",
+            name=profile["name"] or "seu servidor",
             member_count=None,
-            icon_url=None,
+            icon_url=profile["icon_url"],
         )
     except Exception:
         pass
+
+    guild_name = profile["name"]
+    if guild_name == "seu servidor":
+        connected = "O bot já está no seu servidor."
+    else:
+        connected = f"O bot já está no servidor {guild_name}."
 
     return render_template(
         "result.html",
         ok=True,
         title="Bot adicionado",
-        message=(
-            f"Servidor conectado. DISCORD_GUILD_ID={guild_id}. "
-            "Em Kubernetes, grave esse id no SealedSecret do bot e reinicie o "
-            "Deployment para sincronizar os slash commands. Localmente o valor "
-            "também é gravado no .env quando o arquivo for gravável."
-        ),
-        guild_id=guild_id,
+        message=connected,
+        guild_name=guild_name,
         home_url=url_for("dashboard"),
     )
 

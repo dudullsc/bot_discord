@@ -39,28 +39,34 @@ class MusicBot(commands.Bot):
         await wavelink.Pool.connect(nodes=nodes, client=self, cache_capacity=100)
 
         await self.load_extension("bot.cogs.music")
+        await self._sync_commands()
 
-        guild_id = os.getenv("DISCORD_GUILD_ID", "").strip()
-        if guild_id:
-            guild = discord.Object(id=int(guild_id))
-            self.tree.copy_global_to(guild=guild)
-            try:
-                synced = await self.tree.sync(guild=guild)
-                logger.info("Synced %s slash command(s) to guild %s", len(synced), guild_id)
-            except discord.Forbidden:
-                logger.warning(
-                    "Sem acesso ao guild %s (bot nao esta no servidor?). Sincronizando globalmente.",
-                    guild_id,
-                )
+    async def _sync_commands(self, guild: discord.abc.Snowflake | None = None) -> None:
+        try:
+            if guild is None:
                 synced = await self.tree.sync()
                 logger.info("Synced %s global slash command(s)", len(synced))
-        else:
-            synced = await self.tree.sync()
-            logger.info("Synced %s global slash command(s)", len(synced))
+                return
+            self.tree.copy_global_to(guild=guild)
+            synced = await self.tree.sync(guild=guild)
+            logger.info(
+                "Synced %s slash command(s) to guild %s",
+                len(synced),
+                getattr(guild, "id", guild),
+            )
+        except discord.Forbidden:
+            logger.warning(
+                "Sem permissão para sincronizar comandos em %s",
+                getattr(guild, "id", guild),
+            )
+        except Exception:
+            logger.exception("Falha ao sincronizar slash commands")
 
     async def on_ready(self) -> None:
         assert self.user is not None
         logger.info("Logged in as %s (%s)", self.user, self.user.id)
+        for guild in self.guilds:
+            await self._sync_commands(guild)
         await self._persist_presence(initial=True)
         if not self.heartbeat_loop.is_running():
             self.heartbeat_loop.start()
@@ -91,6 +97,7 @@ class MusicBot(commands.Bot):
             member_count=guild.member_count,
             icon_url=str(guild.icon.url) if guild.icon else None,
         )
+        await self._sync_commands(guild)
         await self._persist_presence(initial=False)
 
     async def on_guild_remove(self, guild: discord.Guild) -> None:

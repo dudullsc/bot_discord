@@ -170,12 +170,14 @@
     <h1>{{ title }}</h1>
     <p class="message">{{ message }}</p>
 
-    {% if guild_id %}
+    {% if ok %}
     <div class="guide">
-      <strong>Servidor registrado:</strong>
-      <p><code>{{ guild_id }}</code></p>
-      <p>Proximo passo: entre no Discord e execute <code>/play</code> para iniciar a musica.</p>
-      <p>Comandos uteis: <code>/queue</code>, <code>/skip</code>, <code>/leave</code>.</p>
+      <strong>Pronto para tocar</strong>
+      {% if guild_name and guild_name != "seu servidor" %}
+      <p>Servidor: <strong>{{ guild_name }}</strong></p>
+      {% endif %}
+      <p>Entre em um canal de voz no Discord e use <code>/play</code> com o nome ou o link da música.</p>
+      <p>Depois você pode usar <code>/pause</code>, <code>/skip</code>, <code>/queue</code> e <code>/leave</code>.</p>
     </div>
     {% endif %}
 
