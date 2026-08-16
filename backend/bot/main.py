@@ -99,6 +99,34 @@ class MusicBot(commands.Bot):
         )
         await self._sync_commands(guild)
         await self._persist_presence(initial=False)
+        await self._ask_voice_permissions(guild)
+
+    async def _ask_voice_permissions(self, guild: discord.Guild) -> None:
+        me = guild.me
+        if me is None:
+            return
+        text = (
+            "Para eu tocar música, este servidor precisa me dar permissão de "
+            "**Ver canal**, **Conectar** e **Falar** nos canais de voz "
+            "(também nos privados). Quem adicionou o bot pode conferir em "
+            "Configurações do servidor → Cargos → music."
+        )
+        channel = guild.system_channel
+        if channel is None or not channel.permissions_for(me).send_messages:
+            channel = next(
+                (
+                    ch
+                    for ch in guild.text_channels
+                    if ch.permissions_for(me).send_messages
+                ),
+                None,
+            )
+        if channel is None:
+            return
+        try:
+            await channel.send(text)
+        except discord.Forbidden:
+            logger.warning("Sem permissão para pedir cargos em %s", guild.id)
 
     async def on_guild_remove(self, guild: discord.Guild) -> None:
         await asyncio.to_thread(db.deactivate_guild, str(guild.id))

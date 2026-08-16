@@ -25,8 +25,27 @@ from bot import db  # noqa: E402
 ENV_PATH = ROOT / ".env"
 load_dotenv(ENV_PATH)
 
-# Send Messages | Embed Links | Connect | Speak | Use Voice Activity
-BOT_PERMISSIONS = 36_718_592
+# Pedidas na tela de autorização do Discord. O servidor precisa conceder.
+VIEW_CHANNEL = 1 << 10
+SEND_MESSAGES = 1 << 11
+EMBED_LINKS = 1 << 14
+READ_MESSAGE_HISTORY = 1 << 16
+CONNECT = 1 << 20
+SPEAK = 1 << 21
+USE_VAD = 1 << 25
+ADD_REACTIONS = 1 << 6
+USE_APP_COMMANDS = 1 << 31
+BOT_PERMISSIONS = (
+    VIEW_CHANNEL
+    | SEND_MESSAGES
+    | EMBED_LINKS
+    | READ_MESSAGE_HISTORY
+    | CONNECT
+    | SPEAK
+    | USE_VAD
+    | ADD_REACTIONS
+    | USE_APP_COMMANDS
+)
 OAUTH_SCOPES = "bot applications.commands"
 
 app = Flask(__name__)
