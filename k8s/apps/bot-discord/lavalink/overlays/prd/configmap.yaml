@@ -42,6 +42,7 @@ data:
         allowDirectPlaylistIds: true
         clients:
           - MUSIC
+          - TV
           - TVHTML5_SIMPLY
           - MWEB
           - ANDROID_MUSIC

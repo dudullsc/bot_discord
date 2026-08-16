@@ -81,7 +81,7 @@ class Music(commands.Cog):
                 await self._send(interaction, "Não há nada tocando no momento.")
                 return None
             try:
-                player = await channel.connect(cls=wavelink.Player, self_deaf=True, timeout=15)
+                player = await channel.connect(cls=wavelink.Player, self_deaf=True, timeout=45)
             except discord.ClientException:
                 await self._send(interaction, "Não consegui entrar no canal de voz.")
                 return None
