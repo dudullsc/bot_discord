@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% if ok %}Sucesso{% else %}Erro{% endif %} — music</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --ink: #0f2a2e;
+      --muted: #3d5a60;
+      --surface: #f3faf8;
+      --teal: #0d8a7c;
+      --teal-deep: #06665c;
+      --amber: #e8a317;
+      --ok: #0d8a7c;
+      --bad: #b33a2b;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      font-family: "Outfit", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(ellipse 90% 70% at 10% 0%, rgba(13, 138, 124, 0.18), transparent 55%),
+        radial-gradient(ellipse 70% 50% at 95% 85%, rgba(232, 163, 23, 0.28), transparent 50%),
+        linear-gradient(165deg, #e8f6f3 0%, var(--surface) 45%, #fff8eb 100%);
+      display: grid;
+      place-items: center;
+      padding: 2rem 1.25rem;
+    }
+
+    main {
+      width: min(100%, 34rem);
+      text-align: center;
+      animation: rise 0.55s ease-out both;
+    }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(0.75rem); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .brand {
+      font-family: "Fraunces", Georgia, serif;
+      font-weight: 700;
+      font-size: 2rem;
+      letter-spacing: -0.03em;
+      margin-bottom: 1.5rem;
+    }
+
+    .brand span {
+      background: linear-gradient(120deg, var(--teal-deep), var(--teal) 50%, var(--amber));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .status {
+      display: inline-block;
+      width: 0.65rem;
+      height: 0.65rem;
+      border-radius: 50%;
+      margin-bottom: 1rem;
+      background: {% if ok %}var(--ok){% else %}var(--bad){% endif %};
+      box-shadow: 0 0 0 6px {% if ok %}rgba(13, 138, 124, 0.2){% else %}rgba(179, 58, 43, 0.15){% endif %};
+      animation: pulse 1.4s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.15); }
+    }
+
+    h1 {
+      font-family: "Fraunces", Georgia, serif;
+      font-weight: 600;
+      font-size: 1.65rem;
+      margin-bottom: 0.75rem;
+    }
+
+    p {
+      color: var(--muted);
+      line-height: 1.55;
+      margin-bottom: 1.75rem;
+    }
+
+    code {
+      font-size: 0.9em;
+      padding: 0.15em 0.4em;
+      border-radius: 0.3em;
+      background: rgba(15, 42, 46, 0.06);
+      color: var(--ink);
+    }
+
+    a {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.85rem 1.5rem;
+      font-weight: 600;
+      color: #fff;
+      text-decoration: none;
+      background: linear-gradient(135deg, var(--teal), var(--teal-deep));
+      border-radius: 999px;
+      transition: transform 0.2s ease, filter 0.2s ease;
+    }
+
+    a:hover {
+      transform: translateY(-2px);
+      filter: brightness(1.05);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <p class="brand"><span>music</span></p>
+    <div class="status" aria-hidden="true"></div>
+    <h1>{{ title }}</h1>
+    <p>{{ message }}</p>
+    {% if guild_id %}
+    <p><code>{{ guild_id }}</code></p>
+    {% endif %}
+    <a href="{{ home_url or url_for('index') }}">Voltar</a>
+  </main>
+</body>
+</html>

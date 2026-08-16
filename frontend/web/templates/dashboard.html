@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>music — painel</title>
+  <meta http-equiv="refresh" content="30" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --ink: #0f2a2e;
+      --muted: #3d5a60;
+      --surface: #f3faf8;
+      --teal: #0d8a7c;
+      --teal-deep: #06665c;
+      --amber: #e8a317;
+      --amber-glow: rgba(232, 163, 23, 0.35);
+      --ok: #0d8a7c;
+      --bad: #b33a2b;
+      --line: rgba(15, 42, 46, 0.1);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      font-family: "Outfit", sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(ellipse 90% 70% at 10% 0%, rgba(13, 138, 124, 0.22), transparent 55%),
+        radial-gradient(ellipse 70% 50% at 95% 85%, var(--amber-glow), transparent 50%),
+        linear-gradient(165deg, #e8f6f3 0%, var(--surface) 45%, #fff8eb 100%);
+      padding: 2rem 1.25rem 3rem;
+    }
+
+    .wrap {
+      width: min(100%, 56rem);
+      margin: 0 auto;
+      animation: rise 0.55s ease-out both;
+    }
+
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(0.8rem); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: end;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .brand {
+      font-family: "Fraunces", Georgia, serif;
+      font-weight: 700;
+      font-size: clamp(2.4rem, 8vw, 3.5rem);
+      letter-spacing: -0.04em;
+      line-height: 0.95;
+    }
+
+    .brand span {
+      background: linear-gradient(120deg, var(--teal-deep), var(--teal) 50%, var(--amber));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .nav {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .nav a {
+      text-decoration: none;
+      color: var(--ink);
+      font-weight: 600;
+      padding: 0.65rem 1rem;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.55);
+      border: 1px solid var(--line);
+      transition: transform 0.2s ease, background 0.2s ease;
+    }
+
+    .nav a:hover { transform: translateY(-1px); background: #fff; }
+
+    .nav a.primary {
+      color: #fff;
+      background: linear-gradient(135deg, var(--teal), var(--teal-deep));
+      border: none;
+    }
+
+    h1 {
+      font-family: "Fraunces", Georgia, serif;
+      font-weight: 600;
+      font-size: 1.5rem;
+      margin-bottom: 0.35rem;
+    }
+
+    .lead {
+      color: var(--muted);
+      margin-bottom: 1.5rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.75rem;
+    }
+
+    .stat {
+      padding: 1.1rem 1.15rem;
+      border-radius: 1rem;
+      background: rgba(255, 255, 255, 0.62);
+      border: 1px solid var(--line);
+    }
+
+    .stat .label {
+      display: block;
+      font-size: 0.8rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 0.45rem;
+    }
+
+    .stat .value {
+      font-family: "Fraunces", Georgia, serif;
+      font-size: 1.45rem;
+      font-weight: 600;
+    }
+
+    .status-dot {
+      display: inline-block;
+      width: 0.65rem;
+      height: 0.65rem;
+      border-radius: 50%;
+      margin-right: 0.4rem;
+      background: {% if status.online %}var(--ok){% else %}var(--bad){% endif %};
+      box-shadow: 0 0 0 5px {% if status.online %}rgba(13,138,124,0.18){% else %}rgba(179,58,43,0.14){% endif %};
+    }
+
+    .panel {
+      padding: 1.25rem;
+      border-radius: 1.1rem;
+      background: rgba(255, 255, 255, 0.62);
+      border: 1px solid var(--line);
+    }
+
+    .panel h2 {
+      font-family: "Fraunces", Georgia, serif;
+      font-size: 1.2rem;
+      margin-bottom: 1rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      text-align: left;
+      padding: 0.75rem 0.35rem;
+      border-bottom: 1px solid var(--line);
+      vertical-align: middle;
+    }
+
+    th {
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .empty {
+      color: var(--muted);
+      padding: 0.5rem 0;
+    }
+
+    .meta {
+      margin-top: 1rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    .warn {
+      margin-top: 1rem;
+      color: #8a4b00;
+      font-size: 0.95rem;
+    }
+
+    code {
+      font-size: 0.85em;
+      padding: 0.12em 0.35em;
+      border-radius: 0.3em;
+      background: rgba(15, 42, 46, 0.06);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <p class="brand"><span>music</span></p>
+      <nav class="nav">
+        <a href="{{ url_for('index') }}">Início</a>
+        {% if invite_ready %}
+        <a class="primary" href="{{ url_for('invite') }}">Adicionar bot</a>
+        {% endif %}
+      </nav>
+    </header>
+
+    <h1>Painel de gerenciamento</h1>
+    <p class="lead">Status do bot, tempo online e servidores conectados (PostgreSQL).</p>
+
+    <div class="grid">
+      <div class="stat">
+        <span class="label">Status</span>
+        <div class="value">
+          <span class="status-dot" aria-hidden="true"></span>
+          {% if status.online %}Online{% else %}Offline{% endif %}
+        </div>
+      </div>
+      <div class="stat">
+        <span class="label">Tempo online</span>
+        <div class="value">{% if status.online %}{{ uptime_label }}{% else %}—{% endif %}</div>
+      </div>
+      <div class="stat">
+        <span class="label">Servidores</span>
+        <div class="value">{{ status.guild_count or status.guilds|length }}</div>
+      </div>
+      <div class="stat">
+        <span class="label">Bot</span>
+        <div class="value">{{ status.bot_username or "—" }}</div>
+      </div>
+    </div>
+
+    <section class="panel">
+      <h2>Servidores</h2>
+      {% if status.guilds %}
+      <table>
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th>Membros</th>
+            <th>ID</th>
+            <th>Visto</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for guild in status.guilds %}
+          <tr>
+            <td>{{ guild.name }}</td>
+            <td>{{ guild.member_count if guild.member_count is not none else "—" }}</td>
+            <td><code>{{ guild.guild_id }}</code></td>
+            <td>{{ guild.last_seen or "—" }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="empty">Nenhum servidor ainda. Adicione o bot e deixe-o rodando.</p>
+      {% endif %}
+
+      <p class="meta">
+        Banco: <code>{{ status.database }}</code>
+        {% if status.last_heartbeat %}
+        · Heartbeat: <code>{{ status.last_heartbeat }}</code>
+        {% endif %}
+      </p>
+      {% if status.error %}
+      <p class="warn">Erro ao ler o banco: {{ status.error }}</p>
+      {% endif %}
+    </section>
+  </div>
+</body>
+</html>

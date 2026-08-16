@@ -1,0 +1,3 @@
+# Instala dependências de backend e frontend
+-r backend/requirements.txt
+-r frontend/requirements.txt
