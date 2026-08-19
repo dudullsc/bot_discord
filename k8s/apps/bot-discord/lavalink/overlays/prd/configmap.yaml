@@ -15,8 +15,6 @@ data:
       plugins:
         - dependency: "dev.lavalink.youtube:youtube-plugin:1.18.2"
           snapshot: false
-        - dependency: "com.github.topi314.lavasrc:lavasrc-plugin:4.8.3"
-          snapshot: false
       server:
         password: "unused-overridden-by-env"
         sources:
@@ -37,29 +35,6 @@ data:
         gc-warnings: true
 
     plugins:
-      lavasrc:
-        providers:
-          - "ytsearch:\"%ISRC%\""
-          - "ytsearch:%QUERY%"
-        sources:
-          spotify: true
-          applemusic: false
-          deezer: false
-          yandexmusic: false
-          flowerytts: false
-          youtube: false
-          vkmusic: false
-          tidal: false
-          qobuz: false
-          ytdlp: false
-          jiosaavn: false
-        spotify:
-          clientId: "${SPOTIFY_CLIENT_ID:}"
-          clientSecret: "${SPOTIFY_CLIENT_SECRET:}"
-          countryCode: "BR"
-          playlistLoadLimit: 6
-          albumLoadLimit: 6
-          preferPartnerApi: true
       youtube:
         enabled: true
         allowSearch: true
@@ -78,6 +53,9 @@ data:
             playback: false
         oauth:
           enabled: true
+        remoteCipher:
+          url: "https://cipher.kikkia.dev/"
+          userAgent: "bot-discord"
 
     logging:
       level:

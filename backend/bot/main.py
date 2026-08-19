@@ -71,8 +71,6 @@ class MusicBot(commands.Bot):
     async def on_ready(self) -> None:
         assert self.user is not None
         logger.info("Logged in as %s (%s)", self.user, self.user.id)
-        for guild in self.guilds:
-            await self._sync_commands(guild)
         await self._persist_presence(initial=True)
         if not self.heartbeat_loop.is_running():
             self.heartbeat_loop.start()

@@ -179,7 +179,7 @@ plugins:
       enabled: true
 ```
 
-Reinicie o Lavalink, veja o log (`docker compose logs -f lavalink`) e conclua o fluxo OAuth. Depois cole o `refreshToken` no `application.yml`.
+Reinicie o Lavalink, veja o log (`docker compose logs -f lavalink`) e conclua o fluxo OAuth no [google.com/device](https://www.google.com/device) (conta secundária). Não grave o `refreshToken` neste repositório.
 
 ### Bot entra no canal mas não toca
 

@@ -19,7 +19,7 @@ spec:
       labels:
         app: lavalink
       annotations:
-        checksum/lavalink-config: "spotify-partner-api"
+        checksum/lavalink-config: "youtube-remote-cipher"
     spec:
       priorityClassName: pc-6-apps-priority
       containers:
@@ -34,16 +34,6 @@ spec:
                 secretKeyRef:
                   name: bot-discord-app-config
                   key: LAVALINK_PASSWORD
-            - name: SPOTIFY_CLIENT_ID
-              valueFrom:
-                secretKeyRef:
-                  name: bot-discord-spotify
-                  key: SPOTIFY_CLIENT_ID
-            - name: SPOTIFY_CLIENT_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: bot-discord-spotify
-                  key: SPOTIFY_CLIENT_SECRET
           ports:
             - name: http
               containerPort: 2333

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from typing import cast
 
@@ -10,8 +11,9 @@ import wavelink
 from discord import app_commands
 from discord.ext import commands
 
+logger = logging.getLogger("bot")
+
 URL_RE = re.compile(r"https?://", re.IGNORECASE)
-SPOTIFY_URI_RE = re.compile(r"^spotify:", re.IGNORECASE)
 EMBED_COLOR = discord.Color.blurple()
 
 
@@ -84,12 +86,14 @@ class Music(commands.Cog):
             try:
                 player = await channel.connect(cls=wavelink.Player, self_deaf=True, timeout=45)
             except discord.ClientException:
+                logger.exception("Voice ClientException in guild %s channel %s", interaction.guild.id, channel.id)
                 await self._send(interaction, "Não consegui entrar na voz, seu Macaco!")
                 return None
             except Exception:
+                logger.exception("Voice connect failed in guild %s channel %s", interaction.guild.id, channel.id)
                 await self._send(
                     interaction,
-                    "Não consegui entrar na voz, seu Macaco! Me dá permissão de Conectar e Falar nesse canal.",
+                    "Não consegui entrar na voz, seu Macaco! Confere se o Lavalink tá de pé e se eu tenho Conectar e Falar nesse canal.",
                 )
                 return None
             player.autoplay = wavelink.AutoPlayMode.partial
@@ -111,8 +115,8 @@ class Music(commands.Cog):
 
         return player
 
-    @app_commands.command(name="play", description="Toca uma música por link ou nome (YouTube/Spotify)")
-    @app_commands.describe(query="Link do YouTube/Spotify, playlist do Spotify, ou nome da música")
+    @app_commands.command(name="play", description="Toca uma música por link ou nome (YouTube)")
+    @app_commands.describe(query="Link do YouTube ou nome da música")
     async def play(self, interaction: discord.Interaction, query: str) -> None:
         await interaction.response.defer()
         player = await self._require_player(interaction, connect=True)
@@ -120,12 +124,13 @@ class Music(commands.Cog):
             return
 
         search_query = query.strip()
-        if not URL_RE.match(search_query) and not SPOTIFY_URI_RE.match(search_query):
+        if not URL_RE.match(search_query):
             search_query = f"ytsearch:{search_query}"
 
         try:
             tracks: wavelink.Search = await wavelink.Playable.search(search_query)
         except Exception:
+            logger.exception("Track search failed for %s", search_query)
             await interaction.followup.send(
                 "Falha ao buscar a música, seu Macaco! Verifica se o link tá online e tenta de novo."
             )
@@ -187,6 +192,7 @@ class Music(commands.Cog):
         channel = getattr(player, "channel", None) if player is not None else None
         if channel is None:
             return
+        logger.warning("Track exception: %s", getattr(payload, "exception", payload))
         try:
             await channel.send(
                 "Não consegui reproduzir essa faixa, seu Macaco! O YouTube recusou o áudio. Tenta outro link."
