@@ -48,6 +48,43 @@ def is_mix_query(query: str) -> bool:
     return bool(MIX_QUERY_RE.search(stripped))
 
 
+def source_label(track: wavelink.Playable | list[wavelink.Playable] | wavelink.Playlist) -> str:
+    sample: wavelink.Playable | None
+    if isinstance(track, wavelink.Playlist):
+        try:
+            sample = next(iter(track), None)
+        except Exception:
+            sample = None
+    elif isinstance(track, list):
+        sample = track[0] if track else None
+    else:
+        sample = track
+    uri = ((sample.uri if sample else "") or "").lower()
+    if "soundcloud.com" in uri:
+        return "SoundCloud"
+    if "youtube.com" in uri or "youtu.be" in uri:
+        return "YouTube"
+    return "busca"
+
+
+async def search_play_query(query: str) -> wavelink.Search:
+    """Prefer SoundCloud for text searches; fall back to YouTube. URLs stay as-is."""
+    stripped = query.strip()
+    if URL_RE.match(stripped):
+        return await wavelink.Playable.search(normalize_play_query(stripped))
+
+    try:
+        sc_tracks = await wavelink.Playable.search(f"scsearch:{stripped}")
+    except Exception:
+        logger.exception("SoundCloud search failed for %s", stripped)
+        sc_tracks = []
+
+    if sc_tracks:
+        return sc_tracks
+
+    return await wavelink.Playable.search(f"ytsearch:{stripped}")
+
+
 def format_ms(ms: int | float | None) -> str:
     if ms is None or ms < 0:
         return "ao vivo"
@@ -283,23 +320,26 @@ class Music(commands.Cog):
             return 0
 
         first = tracks[0]
-        list_match = YT_LIST_RE.search(first.uri or "")
-        if list_match:
-            playlist_url = f"https://www.youtube.com/playlist?list={list_match.group(1)}"
-            try:
-                playlist = await wavelink.Playable.search(playlist_url)
-            except Exception:
-                logger.exception("Failed to resolve mix playlist %s", playlist_url)
-                playlist = None
-            if isinstance(playlist, wavelink.Playlist):
-                playlist.extras = {"requester_id": requester_id}
+        uri = first.uri or ""
+        # YouTube Mix / radio playlists only — SoundCloud uses the search batch below.
+        if "soundcloud.com" not in uri.lower():
+            list_match = YT_LIST_RE.search(uri)
+            if list_match:
+                playlist_url = f"https://www.youtube.com/playlist?list={list_match.group(1)}"
                 try:
-                    added = await player.queue.put_wait(playlist)
+                    playlist = await wavelink.Playable.search(playlist_url)
                 except Exception:
-                    logger.exception("Failed to queue mix playlist %s", playlist_url)
-                    added = 0
-                if added > 0:
-                    return added
+                    logger.exception("Failed to resolve mix playlist %s", playlist_url)
+                    playlist = None
+                if isinstance(playlist, wavelink.Playlist):
+                    playlist.extras = {"requester_id": requester_id}
+                    try:
+                        added = await player.queue.put_wait(playlist)
+                    except Exception:
+                        logger.exception("Failed to queue mix playlist %s", playlist_url)
+                        added = 0
+                    if added > 0:
+                        return added
 
         batch = list(tracks[:MIX_TRACK_LIMIT])
         for track in batch:
@@ -310,7 +350,7 @@ class Music(commands.Cog):
             logger.exception("Failed to queue mix batch")
             return 0
 
-    @app_commands.command(name="play", description="Toca música, playlist ou mix do YouTube (link ou nome)")
+    @app_commands.command(name="play", description="Toca música/mix (SoundCloud primeiro, YouTube se precisar)")
     @app_commands.describe(query="Link, nome da música, ou 'mix artista' para várias faixas")
     async def play(self, interaction: discord.Interaction, query: str) -> None:
         await interaction.response.defer()
@@ -318,12 +358,10 @@ class Music(commands.Cog):
         if player is None:
             return
 
-        search_query = normalize_play_query(query)
-
         try:
-            tracks: wavelink.Search = await wavelink.Playable.search(search_query)
+            tracks: wavelink.Search = await search_play_query(query)
         except Exception:
-            logger.exception("Track search failed for %s", search_query)
+            logger.exception("Track search failed for %s", query)
             await interaction.followup.send(
                 "Falha ao buscar a música. Verifique se o link está online e tente de novo."
             )
@@ -337,13 +375,14 @@ class Music(commands.Cog):
 
         actor = self._display_name(interaction.user)
         was_playing = player.playing
+        origin = source_label(tracks)
 
         if isinstance(tracks, wavelink.Playlist):
             tracks.extras = {"requester_id": interaction.user.id}
             try:
                 added = await player.queue.put_wait(tracks)
             except Exception:
-                logger.exception("Failed to load playlist %s", search_query)
+                logger.exception("Failed to load playlist %s", query)
                 await interaction.followup.send(
                     "Não consegui carregar essa playlist. Cole o link da playlist (youtube.com/playlist?list=...) ou um vídeo com ?list= na URL."
                 )
@@ -358,7 +397,7 @@ class Music(commands.Cog):
             embed = discord.Embed(
                 title="Playlist adicionada",
                 description=(
-                    f"**{tracks.name}** — `{added}` faixa(s) na fila.\n"
+                    f"**{tracks.name}** — `{added}` faixa(s) na fila (`{origin}`).\n"
                     "Se alguma faixa falhar, eu pulo e sigo a playlist."
                 ),
                 color=EMBED_COLOR,
@@ -395,7 +434,7 @@ class Music(commands.Cog):
                 embed = discord.Embed(
                     title="Mix adicionado",
                     description=(
-                        f"Busca: `{query.strip()}`\n"
+                        f"Busca: `{query.strip()}` via `{origin}`\n"
                         f"Enfileirei `{added}` faixa(s) relacionadas.\n"
                         "Se alguma falhar, eu pulo e sigo o mix."
                     ),
@@ -418,7 +457,7 @@ class Music(commands.Cog):
                 try:
                     await player.queue.put_wait(track)
                 except Exception:
-                    logger.exception("Failed to queue track from %s", search_query)
+                    logger.exception("Failed to queue track from %s", query)
                     await interaction.followup.send(
                         "Não consegui enfileirar essa faixa. Tente outro link."
                     )
@@ -440,7 +479,7 @@ class Music(commands.Cog):
                 else:
                     await interaction.followup.send(
                         content=(
-                            f'Olha só o "{actor}" pediu uma música que coisa mais linda, '
+                            f'Olha só o "{actor}" pediu uma música no {origin} que coisa mais linda, '
                             "esperamos que não seja uma música de gay."
                         ),
                         embed=track_embed("Tocando agora", track, requester=interaction.user),
@@ -455,7 +494,7 @@ class Music(commands.Cog):
                 logger.exception("Failed to start playback in guild %s", interaction.guild.id)
                 player.queue.clear()
                 await interaction.followup.send(
-                    "Não consegui tocar essa faixa. O YouTube está bloqueando o áudio, então tente outro vídeo."
+                    "Não consegui tocar essa faixa. Tente outra busca ou outro link."
                 )
                 await self._leave_if_idle(player, notify=True)
                 return
