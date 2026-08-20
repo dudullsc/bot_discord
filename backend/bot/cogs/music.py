@@ -866,10 +866,15 @@ class Music(commands.Cog):
     @commands.Cog.listener()
     async def on_wavelink_track_end(self, payload: wavelink.TrackEndEventPayload) -> None:
         player = payload.player
+        # With AutoPlayMode.partial, the next queued track starts after this event.
+        # On /skip, playing is briefly False and disconnecting here kicks the bot mid-queue.
         if player.playing or not player.queue.is_empty:
             return
+        reason = str(getattr(payload, "reason", "") or "").lower()
+        if reason in {"replaced", "stopped"}:
+            return
+        # Only update the panel; inactive_player handles disconnect after idle timeout.
         await self.refresh_player_panel(player, disabled=True)
-        await self._leave_if_idle(player)
 
     @app_commands.command(name="pause", description="Pausa a música atual")
     async def pause(self, interaction: discord.Interaction) -> None:
