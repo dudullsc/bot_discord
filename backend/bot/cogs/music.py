@@ -115,6 +115,21 @@ class Music(commands.Cog):
 
         return player
 
+    async def _leave_if_idle(self, player: wavelink.Player, *, notify: bool = False) -> None:
+        if player.playing or not player.queue.is_empty():
+            return
+        channel = player.channel
+        try:
+            await player.disconnect()
+        except Exception:
+            logger.exception("Failed to disconnect idle player in guild %s", player.guild.id)
+            return
+        if notify and channel is not None:
+            try:
+                await channel.send("Deu ruim e saí da voz, seu Macaco!")
+            except Exception:
+                pass
+
     @app_commands.command(name="play", description="Toca uma música por link ou nome (YouTube)")
     @app_commands.describe(query="Link do YouTube ou nome da música")
     async def play(self, interaction: discord.Interaction, query: str) -> None:
@@ -134,14 +149,30 @@ class Music(commands.Cog):
             await interaction.followup.send(
                 "Falha ao buscar a música, seu Macaco! Verifica se o link tá online e tenta de novo."
             )
+            await self._leave_if_idle(player, notify=True)
             return
 
         if not tracks:
             await interaction.followup.send("Não achei nada nessa busca, seu Macaco!")
+            await self._leave_if_idle(player, notify=True)
             return
 
         if isinstance(tracks, wavelink.Playlist):
-            added = await player.queue.put_wait(tracks)
+            try:
+                added = await player.queue.put_wait(tracks)
+            except Exception:
+                logger.exception("Failed to load playlist %s", search_query)
+                await interaction.followup.send(
+                    "Não consegui carregar essa playlist, seu Macaco! Tenta um vídeo ou busca por nome."
+                )
+                await self._leave_if_idle(player, notify=True)
+                return
+            if added <= 0:
+                await interaction.followup.send(
+                    "Essa playlist veio vazia, seu Macaco! Tenta outro link."
+                )
+                await self._leave_if_idle(player, notify=True)
+                return
             embed = discord.Embed(
                 title="Playlist adicionada",
                 description=f"**{tracks.name}** — `{added}` faixa(s) na fila.",
@@ -151,7 +182,15 @@ class Music(commands.Cog):
         else:
             track = tracks[0]
             track.extras = {"requester_id": interaction.user.id}
-            await player.queue.put_wait(track)
+            try:
+                await player.queue.put_wait(track)
+            except Exception:
+                logger.exception("Failed to queue track from %s", search_query)
+                await interaction.followup.send(
+                    "Não consegui enfileirar essa faixa, seu Macaco! Tenta outro link."
+                )
+                await self._leave_if_idle(player, notify=True)
+                return
             if player.playing:
                 await interaction.followup.send(
                     embed=track_embed("Adicionado à fila", track, requester=interaction.user)
@@ -165,9 +204,12 @@ class Music(commands.Cog):
             try:
                 await player.play(player.queue.get(), volume=50)
             except Exception:
+                logger.exception("Failed to start playback in guild %s", interaction.guild.id)
+                player.queue.clear()
                 await interaction.followup.send(
                     "Não consegui tocar essa faixa, seu Macaco! O YouTube tá bloqueando o áudio — tenta outro vídeo."
                 )
+                await self._leave_if_idle(player, notify=True)
                 return
 
     @commands.Cog.listener()
@@ -189,16 +231,33 @@ class Music(commands.Cog):
     @commands.Cog.listener()
     async def on_wavelink_track_exception(self, payload: object) -> None:
         player = getattr(payload, "player", None)
-        channel = getattr(player, "channel", None) if player is not None else None
-        if channel is None:
+        if player is None:
             return
+        channel = getattr(player, "channel", None)
         logger.warning("Track exception: %s", getattr(payload, "exception", payload))
-        try:
-            await channel.send(
-                "Não consegui reproduzir essa faixa, seu Macaco! O YouTube recusou o áudio. Tenta outro link."
-            )
-        except Exception:
+        if channel is not None:
+            try:
+                await channel.send(
+                    "Não consegui reproduzir essa faixa, seu Macaco! O YouTube recusou o áudio. Tenta outro link."
+                )
+            except Exception:
+                pass
+        if not player.queue.is_empty():
+            try:
+                await player.skip(force=True)
+            except Exception:
+                logger.exception("Failed to skip broken track in guild %s", player.guild.id)
+                player.queue.clear()
+                await self._leave_if_idle(player, notify=True)
             return
+        await self._leave_if_idle(player, notify=True)
+
+    @commands.Cog.listener()
+    async def on_wavelink_track_end(self, payload: wavelink.TrackEndEventPayload) -> None:
+        player = payload.player
+        if player.playing or not player.queue.is_empty():
+            return
+        await self._leave_if_idle(player)
 
     @app_commands.command(name="pause", description="Pausa a música atual")
     async def pause(self, interaction: discord.Interaction) -> None:
