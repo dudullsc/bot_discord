@@ -222,6 +222,23 @@ class Music(commands.Cog):
         else:
             await interaction.response.send_message(content, ephemeral=ephemeral)
 
+    async def _followup(
+        self,
+        interaction: discord.Interaction,
+        *,
+        content: str | None = None,
+        embed: discord.Embed | None = None,
+        view: discord.ui.View | None = None,
+    ) -> None:
+        kwargs: dict[str, object] = {}
+        if content is not None:
+            kwargs["content"] = content
+        if embed is not None:
+            kwargs["embed"] = embed
+        if view is not None:
+            kwargs["view"] = view
+        await interaction.followup.send(**kwargs)
+
     async def _require_player(
         self,
         interaction: discord.Interaction,
@@ -410,7 +427,7 @@ class Music(commands.Cog):
                     was_playing=True,
                     idle_content="",
                 )
-                await interaction.followup.send(content=content, embed=embed, view=view)
+                await self._followup(interaction, content=content, embed=embed, view=view)
             else:
                 content = (
                     f'Olha só o "{actor}" pediu uma playlist que coisa mais linda, '
@@ -450,7 +467,7 @@ class Music(commands.Cog):
                         "vamos ver se aguenta a playlist toda."
                     ),
                 )
-                await interaction.followup.send(content=content, embed=embed, view=view)
+                await self._followup(interaction, content=content, embed=embed, view=view)
             else:
                 track = tracks[0]
                 track.extras = {"requester_id": interaction.user.id}
@@ -471,7 +488,8 @@ class Music(commands.Cog):
                         was_playing=True,
                         idle_content="",
                     )
-                    await interaction.followup.send(
+                    await self._followup(
+                        interaction,
                         content=content,
                         embed=track_embed("Adicionado à fila", track, requester=interaction.user),
                         view=view,
