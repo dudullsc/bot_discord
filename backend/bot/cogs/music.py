@@ -146,11 +146,45 @@ class SkipNowView(discord.ui.View):
             pass
 
 
+class PlayerPanelView(discord.ui.View):
+    """Interactive now-playing controls."""
+
+    def __init__(self, cog: Music, *, paused: bool = False) -> None:
+        super().__init__(timeout=600)
+        self.cog = cog
+        for child in self.children:
+            if isinstance(child, discord.ui.Button) and child.custom_id == "music:pause":
+                child.emoji = "▶️" if paused else "⏸️"
+                child.label = "Continuar" if paused else "Pausar"
+
+    @discord.ui.button(emoji="⏮️", label="Voltar", style=discord.ButtonStyle.secondary, custom_id="music:prev", row=0)
+    async def previous(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await self.cog.panel_previous(interaction)
+
+    @discord.ui.button(emoji="⏸️", label="Pausar", style=discord.ButtonStyle.primary, custom_id="music:pause", row=0)
+    async def pause_toggle(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await self.cog.panel_pause_toggle(interaction)
+
+    @discord.ui.button(emoji="⏭️", label="Pular", style=discord.ButtonStyle.secondary, custom_id="music:skip", row=0)
+    async def skip(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await self.cog.panel_skip(interaction)
+
+    @discord.ui.button(emoji="⏹️", label="Parar", style=discord.ButtonStyle.danger, custom_id="music:stop", row=1)
+    async def stop(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await self.cog.panel_stop(interaction)
+
+    @discord.ui.button(emoji="🚪", label="Sair", style=discord.ButtonStyle.danger, custom_id="music:leave", row=1)
+    async def leave(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await self.cog.panel_leave(interaction)
+
+
 class Music(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self._skip_streak: dict[int, int] = {}
         self._manual_skip_streak: dict[int, int] = {}
+        # guild_id -> (channel_id, message_id)
+        self._player_panels: dict[int, tuple[int, int]] = {}
 
     @staticmethod
     def _player(interaction: discord.Interaction) -> wavelink.Player | None:
@@ -324,6 +358,180 @@ class Music(commands.Cog):
                 await channel.send("Saí da voz porque não havia mais nada tocando.")
             except Exception:
                 pass
+
+    def player_embed(self, player: wavelink.Player) -> discord.Embed:
+        track = player.current
+        if track is None:
+            embed = discord.Embed(
+                title="Player",
+                description="Nada tocando no momento.",
+                color=EMBED_COLOR,
+            )
+            return embed
+
+        status = "⏸ Pausado" if player.paused else "▶ Tocando"
+        embed = discord.Embed(
+            title="Player",
+            description=f"**[{track.title}]({track.uri})**\npor `{track.author}`",
+            color=EMBED_COLOR,
+        )
+        embed.add_field(name="Status", value=status, inline=True)
+        embed.add_field(
+            name="Progresso",
+            value=f"`{format_ms(player.position)} / {format_ms(track.length)}`",
+            inline=True,
+        )
+        embed.add_field(name="Fila", value=f"`{len(player.queue)}` faixa(s)", inline=True)
+        requester = self._requester_name(track, player.guild)
+        embed.add_field(name="Pedido por", value=requester, inline=True)
+        embed.add_field(name="Fonte", value=source_label(track), inline=True)
+        if track.artwork:
+            embed.set_thumbnail(url=track.artwork)
+        return embed
+
+    async def refresh_player_panel(
+        self,
+        player: wavelink.Player,
+        *,
+        channel: discord.abc.Messageable | None = None,
+        disabled: bool = False,
+    ) -> None:
+        guild = player.guild
+        if guild is None:
+            return
+
+        embed = self.player_embed(player)
+        view: discord.ui.View | None
+        if disabled or player.current is None:
+            view = None
+        else:
+            view = PlayerPanelView(self, paused=player.paused)
+
+        existing = self._player_panels.get(guild.id)
+        message: discord.Message | None = None
+        if existing is not None:
+            channel_id, message_id = existing
+            text_channel = guild.get_channel(channel_id)
+            if text_channel is not None and hasattr(text_channel, "fetch_message"):
+                try:
+                    message = await text_channel.fetch_message(message_id)
+                except Exception:
+                    message = None
+
+        if message is not None:
+            try:
+                kwargs: dict[str, object] = {"embed": embed}
+                if view is not None:
+                    kwargs["view"] = view
+                else:
+                    kwargs["view"] = None
+                await message.edit(**kwargs)
+                if disabled or player.current is None:
+                    self._player_panels.pop(guild.id, None)
+                return
+            except Exception:
+                self._player_panels.pop(guild.id, None)
+
+        if disabled or player.current is None:
+            return
+
+        target = channel
+        if target is None and existing is not None:
+            target = guild.get_channel(existing[0])
+        if target is None:
+            return
+        try:
+            sent = await target.send(embed=embed, view=view)
+        except Exception:
+            logger.exception("Failed to send player panel in guild %s", guild.id)
+            return
+        self._player_panels[guild.id] = (sent.channel.id, sent.id)
+
+    async def panel_previous(self, interaction: discord.Interaction) -> None:
+        player = await self._require_player(interaction)
+        if player is None:
+            return
+        history = player.queue.history
+        if history.is_empty:
+            await self._send(interaction, "Não tem música anterior.")
+            return
+
+        try:
+            previous = list(history)[-1]
+            history.delete(len(history) - 1)
+        except Exception:
+            logger.exception("Failed to read history for previous track")
+            await self._send(interaction, "Não consegui voltar a faixa.")
+            return
+
+        current = player.current
+        if current is not None:
+            player.queue.put_at(0, current)
+
+        try:
+            await player.play(previous)
+        except Exception:
+            logger.exception("Failed to play previous track")
+            await self._send(interaction, "Não consegui tocar a faixa anterior.")
+            return
+
+        if interaction.response.is_done():
+            await interaction.followup.send("Voltei a faixa anterior.", ephemeral=True)
+        else:
+            await interaction.response.send_message("Voltei a faixa anterior.", ephemeral=True)
+        await self.refresh_player_panel(player, channel=interaction.channel)
+
+    async def panel_pause_toggle(self, interaction: discord.Interaction) -> None:
+        player = await self._require_player(interaction)
+        if player is None:
+            return
+        if not player.playing and not player.paused:
+            await self._send(interaction, "Nada tocando no momento.")
+            return
+        await player.pause(not player.paused)
+        label = "Pausado." if player.paused else "Continuando."
+        if interaction.response.is_done():
+            await interaction.followup.send(label, ephemeral=True)
+        else:
+            await interaction.response.send_message(label, ephemeral=True)
+        await self.refresh_player_panel(player, channel=interaction.channel)
+
+    async def panel_skip(self, interaction: discord.Interaction) -> None:
+        skipped = await self.handle_skip(interaction)
+        if skipped and interaction.guild is not None:
+            player = self._player(interaction)
+            if player is not None:
+                await self.refresh_player_panel(player, channel=interaction.channel)
+
+    async def panel_stop(self, interaction: discord.Interaction) -> None:
+        player = await self._require_player(interaction)
+        if player is None:
+            return
+        player.queue.clear()
+        await player.stop()
+        if interaction.guild is not None:
+            self._manual_skip_streak.pop(interaction.guild.id, None)
+        if interaction.response.is_done():
+            await interaction.followup.send("Parado e fila limpa.", ephemeral=True)
+        else:
+            await interaction.response.send_message("Parado e fila limpa.", ephemeral=True)
+        await self.refresh_player_panel(player, channel=interaction.channel, disabled=True)
+
+    async def panel_leave(self, interaction: discord.Interaction) -> None:
+        player = await self._require_player(interaction)
+        if player is None:
+            return
+        guild_id = interaction.guild.id if interaction.guild else None
+        await self.refresh_player_panel(player, channel=interaction.channel, disabled=True)
+        player.queue.clear()
+        await player.disconnect()
+        if guild_id is not None:
+            self._manual_skip_streak.pop(guild_id, None)
+            self._player_panels.pop(guild_id, None)
+        if interaction.response.is_done():
+            await interaction.followup.send("Saí da voz.", ephemeral=True)
+        else:
+            await interaction.response.send_message("Saí da voz.", ephemeral=True)
 
     async def _queue_mix_tracks(
         self,
@@ -516,6 +724,17 @@ class Music(commands.Cog):
                 )
                 await self._leave_if_idle(player, notify=True)
                 return
+            await self.refresh_player_panel(player, channel=interaction.channel)
+
+    @commands.Cog.listener()
+    async def on_wavelink_track_start(self, payload: wavelink.TrackStartEventPayload) -> None:
+        player = payload.player
+        channel = None
+        if player.guild is not None:
+            existing = self._player_panels.get(player.guild.id)
+            if existing is not None:
+                channel = player.guild.get_channel(existing[0])
+        await self.refresh_player_panel(player, channel=channel)
 
     @commands.Cog.listener()
     async def on_wavelink_inactive_player(self, player: wavelink.Player) -> None:
@@ -586,6 +805,7 @@ class Music(commands.Cog):
         player = payload.player
         if player.playing or not player.queue.is_empty:
             return
+        await self.refresh_player_panel(player, disabled=True)
         await self._leave_if_idle(player)
 
     @app_commands.command(name="pause", description="Pausa a música atual")
@@ -598,6 +818,7 @@ class Music(commands.Cog):
             return
         await player.pause(True)
         await interaction.response.send_message("Pausado.")
+        await self.refresh_player_panel(player, channel=interaction.channel)
 
     @app_commands.command(name="resume", description="Continua a música pausada")
     async def resume(self, interaction: discord.Interaction) -> None:
@@ -609,6 +830,7 @@ class Music(commands.Cog):
             return
         await player.pause(False)
         await interaction.response.send_message("Continuando.")
+        await self.refresh_player_panel(player, channel=interaction.channel)
 
     @app_commands.command(name="skip", description="Pula a faixa atual")
     async def skip(self, interaction: discord.Interaction) -> None:
@@ -657,6 +879,7 @@ class Music(commands.Cog):
         if interaction.guild is not None:
             self._manual_skip_streak.pop(interaction.guild.id, None)
         await interaction.response.send_message("Parado e fila limpa.")
+        await self.refresh_player_panel(player, channel=interaction.channel, disabled=True)
 
     @app_commands.command(name="queue", description="Mostra a fila de músicas")
     async def queue(self, interaction: discord.Interaction) -> None:
@@ -720,26 +943,23 @@ class Music(commands.Cog):
 
         await interaction.response.send_message(f"Loop: **{label}**.")
 
-    @app_commands.command(name="nowplaying", description="Mostra a música que está tocando")
+    @app_commands.command(name="nowplaying", description="Mostra o player com a música atual e botões")
     async def nowplaying(self, interaction: discord.Interaction) -> None:
+        await self._open_player_panel(interaction)
+
+    @app_commands.command(name="player", description="Abre o painel do player com botões no chat")
+    async def player_cmd(self, interaction: discord.Interaction) -> None:
+        await self._open_player_panel(interaction)
+
+    async def _open_player_panel(self, interaction: discord.Interaction) -> None:
         player = self._player(interaction)
         if player is None or player.current is None:
             await interaction.response.send_message("Nada tocando no momento.", ephemeral=True)
             return
 
-        track = player.current
-        embed = track_embed("Tocando agora", track)
-        position = format_ms(player.position)
-        duration = format_ms(track.length)
-        embed.add_field(name="Progresso", value=f"`{position} / {duration}`", inline=True)
-
-        mode = player.queue.mode
-        if mode is wavelink.QueueMode.loop:
-            embed.add_field(name="Loop", value="faixa", inline=True)
-        elif mode is wavelink.QueueMode.loop_all:
-            embed.add_field(name="Loop", value="fila", inline=True)
-
-        await interaction.response.send_message(embed=embed)
+        await interaction.response.defer(ephemeral=True)
+        await self.refresh_player_panel(player, channel=interaction.channel)
+        await interaction.followup.send("Player atualizado no chat.", ephemeral=True)
 
     @app_commands.command(name="leave", description="Sai do canal de voz")
     async def leave(self, interaction: discord.Interaction) -> None:
@@ -750,6 +970,7 @@ class Music(commands.Cog):
         await player.disconnect()
         if interaction.guild is not None:
             self._manual_skip_streak.pop(interaction.guild.id, None)
+            self._player_panels.pop(interaction.guild.id, None)
         await interaction.response.send_message("Saí da voz.")
 
 
