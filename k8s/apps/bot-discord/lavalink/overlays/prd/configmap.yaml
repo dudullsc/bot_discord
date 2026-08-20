@@ -28,7 +28,7 @@ data:
         bufferDurationMs: 400
         frameBufferDurationMs: 5000
         trackStuckThresholdMs: 10000
-        youtubePlaylistLoadLimit: 6
+        youtubePlaylistLoadLimit: 10
         playerUpdateInterval: 5
         youtubeSearchEnabled: true
         soundcloudSearchEnabled: true
@@ -41,13 +41,28 @@ data:
         allowDirectVideoIds: true
         allowDirectPlaylistIds: true
         clients:
+          - WEB
+          - MWEB
+          - ANDROID_VR
           - TV
           - WEBEMBEDDED
-          - MWEB
-          - WEB
-          - ANDROID_VR
           - MUSIC
         clientOptions:
+          WEB:
+            playlistLoading: true
+            videoLoading: true
+            searching: true
+            playback: false
+          MWEB:
+            playlistLoading: true
+            videoLoading: true
+            searching: true
+            playback: false
+          ANDROID_VR:
+            playlistLoading: true
+            videoLoading: true
+            searching: false
+            playback: false
           TV:
             playlistLoading: false
             videoLoading: false

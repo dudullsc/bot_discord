@@ -19,7 +19,7 @@ spec:
       labels:
         app: lavalink
       annotations:
-        checksum/lavalink-config: "youtube-oauth-tv-client"
+        checksum/lavalink-config: "youtube-playlist-loading"
     spec:
       priorityClassName: pc-6-apps-priority
       containers:

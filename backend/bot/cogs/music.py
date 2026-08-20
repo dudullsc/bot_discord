@@ -15,7 +15,28 @@ from wavelink.exceptions import ChannelTimeoutException
 logger = logging.getLogger("bot")
 
 URL_RE = re.compile(r"https?://", re.IGNORECASE)
+YT_LIST_RE = re.compile(r"[?&]list=([^&]+)", re.IGNORECASE)
 EMBED_COLOR = discord.Color.blurple()
+
+
+def normalize_play_query(query: str) -> str:
+    stripped = query.strip()
+    if not URL_RE.match(stripped):
+        return f"ytsearch:{stripped}"
+
+    stripped = re.sub(
+        r"https?://music\.youtube\.com/",
+        "https://www.youtube.com/",
+        stripped,
+        flags=re.IGNORECASE,
+    )
+
+    list_match = YT_LIST_RE.search(stripped)
+    if list_match:
+        playlist_id = list_match.group(1)
+        return f"https://www.youtube.com/playlist?list={playlist_id}"
+
+    return stripped
 
 
 def format_ms(ms: int | float | None) -> str:
@@ -148,17 +169,15 @@ class Music(commands.Cog):
             except Exception:
                 pass
 
-    @app_commands.command(name="play", description="Toca uma música por link ou nome (YouTube)")
-    @app_commands.describe(query="Link do YouTube ou nome da música")
+    @app_commands.command(name="play", description="Toca música, playlist ou mix do YouTube (link ou nome)")
+    @app_commands.describe(query="Link do YouTube (vídeo ou playlist) ou nome da música")
     async def play(self, interaction: discord.Interaction, query: str) -> None:
         await interaction.response.defer()
         player = await self._require_player(interaction, connect=True)
         if player is None:
             return
 
-        search_query = query.strip()
-        if not URL_RE.match(search_query):
-            search_query = f"ytsearch:{search_query}"
+        search_query = normalize_play_query(query)
 
         try:
             tracks: wavelink.Search = await wavelink.Playable.search(search_query)
@@ -181,7 +200,8 @@ class Music(commands.Cog):
             except Exception:
                 logger.exception("Failed to load playlist %s", search_query)
                 await interaction.followup.send(
-                    "Não consegui carregar essa playlist, seu Macaco! Tenta um vídeo ou busca por nome."
+                    "Não consegui carregar essa playlist, seu Macaco! Cola o link da playlist "
+                    "(youtube.com/playlist?list=...) ou um vídeo com ?list= na URL."
                 )
                 await self._leave_if_idle(player, notify=True)
                 return
@@ -193,7 +213,10 @@ class Music(commands.Cog):
                 return
             embed = discord.Embed(
                 title="Playlist adicionada",
-                description=f"**{tracks.name}** — `{added}` faixa(s) na fila.",
+                description=(
+                    f"**{tracks.name}** — `{added}` faixa(s) na fila.\n"
+                    "Se alguma faixa falhar, eu pulo e sigo a playlist."
+                ),
                 color=EMBED_COLOR,
             )
             await interaction.followup.send(embed=embed)
@@ -252,12 +275,19 @@ class Music(commands.Cog):
         if player is None:
             return
         channel = getattr(player, "channel", None)
+        current = getattr(player, "current", None)
+        title = current.title if current else "faixa"
         logger.warning("Track exception: %s", getattr(payload, "exception", payload))
         if channel is not None:
             try:
-                await channel.send(
-                    "Não consegui reproduzir essa faixa, seu Macaco! O YouTube recusou o áudio. Tenta outro link."
-                )
+                if not player.queue.is_empty:
+                    await channel.send(
+                        f"Pulei **{title}** (YouTube bloqueou), seu Macaco! Indo pra próxima..."
+                    )
+                else:
+                    await channel.send(
+                        "Não consegui reproduzir essa faixa, seu Macaco! O YouTube recusou o áudio."
+                    )
             except Exception:
                 pass
         if not player.queue.is_empty:
