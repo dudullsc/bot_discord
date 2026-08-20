@@ -65,12 +65,39 @@ class Music(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
         self._skip_streak: dict[int, int] = {}
+        self._manual_skip_streak: dict[int, int] = {}
 
     @staticmethod
     def _player(interaction: discord.Interaction) -> wavelink.Player | None:
         if interaction.guild is None:
             return None
         return cast(wavelink.Player | None, interaction.guild.voice_client)
+
+    @staticmethod
+    def _display_name(user: discord.abc.User) -> str:
+        if isinstance(user, discord.Member):
+            return user.display_name
+        return user.name
+
+    @staticmethod
+    def _requester_name(track: wavelink.Playable | None, guild: discord.Guild | None) -> str:
+        if track is None or guild is None:
+            return "quem pediu antes"
+
+        extras = getattr(track, "extras", None)
+        requester_id = None
+        if extras is not None:
+            try:
+                requester_id = dict(extras).get("requester_id")
+            except Exception:
+                requester_id = getattr(extras, "requester_id", None)
+
+        if isinstance(requester_id, int):
+            member = guild.get_member(requester_id)
+            if member is not None:
+                return member.display_name
+
+        return "quem pediu antes"
 
     async def _send(
         self,
@@ -91,20 +118,20 @@ class Music(commands.Cog):
         connect: bool = False,
     ) -> wavelink.Player | None:
         if interaction.guild is None:
-            await self._send(interaction, "Isso aqui só roda num servidor, seu Macaco!")
+            await self._send(interaction, "Isso aqui só roda num servidor.")
             return None
 
         player = self._player(interaction)
         member = interaction.user
         if not isinstance(member, discord.Member) or member.voice is None or member.voice.channel is None:
-            await self._send(interaction, "Entra num canal de voz primeiro, seu Macaco!")
+            await self._send(interaction, "Entre em um canal de voz primeiro.")
             return None
 
         channel = member.voice.channel
 
         if player is None:
             if not connect:
-                await self._send(interaction, "Nada tocando no momento, seu Macaco!")
+                await self._send(interaction, "Nada tocando no momento.")
                 return None
             try:
                 player = await channel.connect(cls=wavelink.Player, self_deaf=True, timeout=45)
@@ -122,18 +149,18 @@ class Music(commands.Cog):
                         pass
                 await self._send(
                     interaction,
-                    "Não consegui entrar na voz a tempo, seu Macaco! O Lavalink pode ter reiniciado — tenta de novo em uns segundos.",
+                    "Não consegui entrar na voz a tempo. O Lavalink pode ter reiniciado, então tente de novo em alguns segundos.",
                 )
                 return None
             except discord.ClientException:
                 logger.exception("Voice ClientException in guild %s channel %s", interaction.guild.id, channel.id)
-                await self._send(interaction, "Não consegui entrar na voz, seu Macaco!")
+                await self._send(interaction, "Não consegui entrar na voz.")
                 return None
             except Exception:
                 logger.exception("Voice connect failed in guild %s channel %s", interaction.guild.id, channel.id)
                 await self._send(
                     interaction,
-                    "Não consegui entrar na voz, seu Macaco! Confere se o Lavalink tá de pé e se eu tenho Conectar e Falar nesse canal.",
+                    "Não consegui entrar na voz. Confere se o Lavalink está ativo e se eu tenho permissão de Conectar e Falar nesse canal.",
                 )
                 return None
             player.autoplay = wavelink.AutoPlayMode.partial
@@ -141,7 +168,7 @@ class Music(commands.Cog):
             if not connect:
                 await self._send(
                     interaction,
-                    f"Já tô em {player.channel.mention}, seu Macaco! Entra nesse canal pra controlar a música.",
+                    f"Já estou em {player.channel.mention}. Entre nesse canal para controlar a música.",
                 )
                 return None
             try:
@@ -149,7 +176,7 @@ class Music(commands.Cog):
             except Exception:
                 await self._send(
                     interaction,
-                    f"Não consegui ir pra {channel.mention}, seu Macaco! Me dá permissão de Conectar e Falar lá.",
+                    f"Não consegui ir para {channel.mention}. Me dê permissão de Conectar e Falar lá.",
                 )
                 return None
 
@@ -166,7 +193,7 @@ class Music(commands.Cog):
             return
         if notify and channel is not None:
             try:
-                await channel.send("Deu ruim e saí da voz, seu Macaco!")
+                await channel.send("Saí da voz porque não havia mais nada tocando.")
             except Exception:
                 pass
 
@@ -185,30 +212,33 @@ class Music(commands.Cog):
         except Exception:
             logger.exception("Track search failed for %s", search_query)
             await interaction.followup.send(
-                "Falha ao buscar a música, seu Macaco! Verifica se o link tá online e tenta de novo."
+                "Falha ao buscar a música. Verifique se o link está online e tente de novo."
             )
             await self._leave_if_idle(player, notify=True)
             return
 
         if not tracks:
-            await interaction.followup.send("Não achei nada nessa busca, seu Macaco!")
+            await interaction.followup.send("Não achei nada nessa busca.")
             await self._leave_if_idle(player, notify=True)
             return
 
+        actor = self._display_name(interaction.user)
+        was_playing = player.playing
+
         if isinstance(tracks, wavelink.Playlist):
+            tracks.extras = {"requester_id": interaction.user.id}
             try:
                 added = await player.queue.put_wait(tracks)
             except Exception:
                 logger.exception("Failed to load playlist %s", search_query)
                 await interaction.followup.send(
-                    "Não consegui carregar essa playlist, seu Macaco! Cola o link da playlist "
-                    "(youtube.com/playlist?list=...) ou um vídeo com ?list= na URL."
+                    "Não consegui carregar essa playlist. Cole o link da playlist (youtube.com/playlist?list=...) ou um vídeo com ?list= na URL."
                 )
                 await self._leave_if_idle(player, notify=True)
                 return
             if added <= 0:
                 await interaction.followup.send(
-                    "Essa playlist veio vazia, seu Macaco! Tenta outro link."
+                    "Essa playlist veio vazia. Tente outro link."
                 )
                 await self._leave_if_idle(player, notify=True)
                 return
@@ -220,7 +250,18 @@ class Music(commands.Cog):
                 ),
                 color=EMBED_COLOR,
             )
-            await interaction.followup.send(embed=embed)
+            if was_playing:
+                first_requester = self._requester_name(player.current, interaction.guild)
+                content = (
+                    f'Opa "{actor}" espera acabar a playlist mais podre do "{first_requester}" '
+                    "assim que acabar a sua vai tocar!"
+                )
+            else:
+                content = (
+                    f'Olha só o "{actor}" pediu uma playlist que coisa mais linda, '
+                    "esperamos que não seja uma playlist de gay."
+                )
+            await interaction.followup.send(content=content, embed=embed)
         else:
             track = tracks[0]
             track.extras = {"requester_id": interaction.user.id}
@@ -229,28 +270,38 @@ class Music(commands.Cog):
             except Exception:
                 logger.exception("Failed to queue track from %s", search_query)
                 await interaction.followup.send(
-                    "Não consegui enfileirar essa faixa, seu Macaco! Tenta outro link."
+                    "Não consegui enfileirar essa faixa. Tente outro link."
                 )
                 await self._leave_if_idle(player, notify=True)
                 return
-            if player.playing:
+            if was_playing:
+                first_requester = self._requester_name(player.current, interaction.guild)
                 await interaction.followup.send(
-                    embed=track_embed("Adicionado à fila", track, requester=interaction.user)
+                    content=(
+                        f'Opa "{actor}" espera acabar a playlist mais podre do "{first_requester}" '
+                        "assim que acabar a sua vai tocar!"
+                    ),
+                    embed=track_embed("Adicionado à fila", track, requester=interaction.user),
                 )
             else:
                 await interaction.followup.send(
-                    embed=track_embed("Tocando agora", track, requester=interaction.user)
+                    content=(
+                        f'Olha só o "{actor}" pediu uma música que coisa mais linda, '
+                        "esperamos que não seja uma música de gay."
+                    ),
+                    embed=track_embed("Tocando agora", track, requester=interaction.user),
                 )
 
         if not player.playing:
             try:
                 await player.play(player.queue.get(), volume=50)
                 self._skip_streak.pop(interaction.guild.id, None)
+                self._manual_skip_streak.pop(interaction.guild.id, None)
             except Exception:
                 logger.exception("Failed to start playback in guild %s", interaction.guild.id)
                 player.queue.clear()
                 await interaction.followup.send(
-                    "Não consegui tocar essa faixa, seu Macaco! O YouTube tá bloqueando o áudio — tenta outro vídeo."
+                    "Não consegui tocar essa faixa. O YouTube está bloqueando o áudio, então tente outro vídeo."
                 )
                 await self._leave_if_idle(player, notify=True)
                 return
@@ -288,12 +339,12 @@ class Music(commands.Cog):
                 if not player.queue.is_empty:
                     if streak == 1:
                         await channel.send(
-                            "Algumas faixas podem ser bloqueadas — vou pulando automaticamente, seu Macaco!"
+                            "Algumas faixas podem ser bloqueadas, então vou pulando automaticamente."
                         )
                 else:
                     self._skip_streak.pop(guild_id, None)
                     await channel.send(
-                        f"Não consegui reproduzir **{title}**, seu Macaco! O YouTube recusou o áudio."
+                        f"Não consegui reproduzir **{title}**. O YouTube recusou o áudio."
                     )
             except Exception:
                 pass
@@ -303,7 +354,7 @@ class Music(commands.Cog):
             if channel is not None:
                 try:
                     await channel.send(
-                        "YouTube bloqueou demais faixas seguidas, seu Macaco! Parando a playlist."
+                        "O YouTube bloqueou faixas demais seguidas. Vou parar a playlist."
                     )
                 except Exception:
                     pass
@@ -332,10 +383,10 @@ class Music(commands.Cog):
         if player is None:
             return
         if player.paused:
-            await interaction.response.send_message("Já tá pausado, seu Macaco!", ephemeral=True)
+            await interaction.response.send_message("Já está pausado.", ephemeral=True)
             return
         await player.pause(True)
-        await interaction.response.send_message("Pausado, seu Macaco!")
+        await interaction.response.send_message("Pausado.")
 
     @app_commands.command(name="resume", description="Continua a música pausada")
     async def resume(self, interaction: discord.Interaction) -> None:
@@ -343,10 +394,10 @@ class Music(commands.Cog):
         if player is None:
             return
         if not player.paused:
-            await interaction.response.send_message("Não tá pausado, seu Macaco!", ephemeral=True)
+            await interaction.response.send_message("Não está pausado.", ephemeral=True)
             return
         await player.pause(False)
-        await interaction.response.send_message("Continuando, seu Macaco!")
+        await interaction.response.send_message("Continuando.")
 
     @app_commands.command(name="skip", description="Pula a faixa atual")
     async def skip(self, interaction: discord.Interaction) -> None:
@@ -354,12 +405,23 @@ class Music(commands.Cog):
         if player is None:
             return
         if not player.playing:
-            await interaction.response.send_message("Nada tocando pra pular, seu Macaco!", ephemeral=True)
+            await interaction.response.send_message("Nada tocando para pular.", ephemeral=True)
             return
-        current = player.current
         await player.skip(force=True)
-        title = current.title if current else "faixa"
-        await interaction.response.send_message(f"Pulei **{title}**, seu Macaco!")
+        guild_id = interaction.guild.id if interaction.guild else 0
+        streak = self._manual_skip_streak.get(guild_id, 0) + 1
+        self._manual_skip_streak[guild_id] = streak
+        actor = self._display_name(interaction.user)
+        if streak == 1:
+            message = f'Pow "{actor}" deixa a música tocar esta tão boa.....'
+        elif streak == 2:
+            message = (
+                f'Ôloco "{actor}" já é a segunda vez que pulou música, '
+                "tem certeza que gosta de ouvir música?"
+            )
+        else:
+            message = "Desisto, pula essa merda aí mesmo, é ruim pra caralho!"
+        await interaction.response.send_message(message)
 
     @app_commands.command(name="stop", description="Para a música e limpa a fila")
     async def stop(self, interaction: discord.Interaction) -> None:
@@ -368,13 +430,15 @@ class Music(commands.Cog):
             return
         player.queue.clear()
         await player.stop()
-        await interaction.response.send_message("Parado e fila limpa, seu Macaco!")
+        if interaction.guild is not None:
+            self._manual_skip_streak.pop(interaction.guild.id, None)
+        await interaction.response.send_message("Parado e fila limpa.")
 
     @app_commands.command(name="queue", description="Mostra a fila de músicas")
     async def queue(self, interaction: discord.Interaction) -> None:
         player = self._player(interaction)
         if player is None or (not player.playing and player.queue.is_empty):
-            await interaction.response.send_message("A fila tá vazia, seu Macaco!", ephemeral=True)
+            await interaction.response.send_message("A fila está vazia.", ephemeral=True)
             return
 
         embed = discord.Embed(title="Fila", color=EMBED_COLOR)
@@ -411,7 +475,7 @@ class Music(commands.Cog):
         if player is None:
             return
         await player.set_volume(int(level))
-        await interaction.response.send_message(f"Volume em **{level}%**, seu Macaco!")
+        await interaction.response.send_message(f"Volume em **{level}%**.")
 
     @app_commands.command(name="loop", description="Alterna o modo de loop (off → faixa → fila)")
     async def loop(self, interaction: discord.Interaction) -> None:
@@ -430,13 +494,13 @@ class Music(commands.Cog):
             player.queue.mode = wavelink.QueueMode.normal
             label = "desligado"
 
-        await interaction.response.send_message(f"Loop: **{label}**, seu Macaco!")
+        await interaction.response.send_message(f"Loop: **{label}**.")
 
     @app_commands.command(name="nowplaying", description="Mostra a música que está tocando")
     async def nowplaying(self, interaction: discord.Interaction) -> None:
         player = self._player(interaction)
         if player is None or player.current is None:
-            await interaction.response.send_message("Nada tocando no momento, seu Macaco!", ephemeral=True)
+            await interaction.response.send_message("Nada tocando no momento.", ephemeral=True)
             return
 
         track = player.current
@@ -460,7 +524,9 @@ class Music(commands.Cog):
             return
         player.queue.clear()
         await player.disconnect()
-        await interaction.response.send_message("Sai da voz, seu Macaco!")
+        if interaction.guild is not None:
+            self._manual_skip_streak.pop(interaction.guild.id, None)
+        await interaction.response.send_message("Saí da voz.")
 
 
 async def setup(bot: commands.Bot) -> None:
