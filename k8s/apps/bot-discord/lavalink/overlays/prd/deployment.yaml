@@ -19,7 +19,7 @@ spec:
       labels:
         app: lavalink
       annotations:
-        checksum/lavalink-config: "mix-query-playlist-limit-50"
+        checksum/lavalink-config: "tv-oauth-first-no-stale-pot"
     spec:
       priorityClassName: pc-6-apps-priority
       containers:

@@ -19,7 +19,7 @@ lavalink:
     bufferDurationMs: 400
     frameBufferDurationMs: 5000
     trackStuckThresholdMs: 10000
-        youtubePlaylistLoadLimit: 50
+    youtubePlaylistLoadLimit: 50
     playerUpdateInterval: 5
     youtubeSearchEnabled: true
     soundcloudSearchEnabled: true
@@ -31,29 +31,15 @@ plugins:
     allowSearch: true
     allowDirectVideoIds: true
     allowDirectPlaylistIds: true
+    # TV + OAuth is the most reliable on datacenter IPs.
     clients:
-      - MWEB
-      - WEB
-      - ANDROID_VR
       - TV
       - WEBEMBEDDED
+      - ANDROID_VR
+      - MWEB
+      - WEB
       - MUSIC
     clientOptions:
-      WEB:
-        playlistLoading: true
-        videoLoading: true
-        searching: true
-        playback: true
-      MWEB:
-        playlistLoading: true
-        videoLoading: true
-        searching: true
-        playback: true
-      ANDROID_VR:
-        playlistLoading: true
-        videoLoading: true
-        searching: false
-        playback: true
       TV:
         playlistLoading: false
         videoLoading: false
@@ -63,15 +49,29 @@ plugins:
         playlistLoading: false
         searching: false
         playback: true
+      ANDROID_VR:
+        playlistLoading: true
+        videoLoading: true
+        searching: false
+        playback: true
+      MWEB:
+        playlistLoading: true
+        videoLoading: true
+        searching: true
+        playback: true
+      WEB:
+        playlistLoading: true
+        videoLoading: true
+        searching: true
+        playback: true
       MUSIC:
         playback: false
         playlistLoading: false
         videoLoading: false
     oauth:
       enabled: true
-    pot:
-      token: "CgtLYnJKeDl1N0pJMCjW2cO8BjIKCgJERRIEEgAgKg=="
-      visitorData: "MnRuJyEtJOv8LW4fImJbwY4qXcflEPdSWXwKWnQappnJt4Ee_3bFCJEUmiePXV3jvyjxMuT8pE3j-ZKoLtF-bIjo7-erKATkj38QRYgrGRsEHDC97Qk9a-tcYdXpmMQt2h6A1S325QgSsRfbfjBfBTeDq_oZBA=="
+    # Do not hardcode expired poToken/visitorData — they break WEB/MWEB.
+    # Generate fresh ones only if needed; TV+OAuth usually does not need pot.
     remoteCipher:
       url: "https://cipher.kikkia.dev/"
       userAgent: "bot-discord"
