@@ -32,8 +32,8 @@ plugins:
     allowDirectVideoIds: true
     allowDirectPlaylistIds: true
     clients:
-      - WEB
       - MWEB
+      - WEB
       - ANDROID_VR
       - TV
       - WEBEMBEDDED
@@ -43,17 +43,17 @@ plugins:
         playlistLoading: true
         videoLoading: true
         searching: true
-        playback: false
+        playback: true
       MWEB:
         playlistLoading: true
         videoLoading: true
         searching: true
-        playback: false
+        playback: true
       ANDROID_VR:
         playlistLoading: true
         videoLoading: true
         searching: false
-        playback: false
+        playback: true
       TV:
         playlistLoading: false
         videoLoading: false
@@ -69,6 +69,9 @@ plugins:
         videoLoading: false
     oauth:
       enabled: true
+    pot:
+      token: "CgtLYnJKeDl1N0pJMCjW2cO8BjIKCgJERRIEEgAgKg=="
+      visitorData: "MnRuJyEtJOv8LW4fImJbwY4qXcflEPdSWXwKWnQappnJt4Ee_3bFCJEUmiePXV3jvyjxMuT8pE3j-ZKoLtF-bIjo7-erKATkj38QRYgrGRsEHDC97Qk9a-tcYdXpmMQt2h6A1S325QgSsRfbfjBfBTeDq_oZBA=="
     remoteCipher:
       url: "https://cipher.kikkia.dev/"
       userAgent: "bot-discord"

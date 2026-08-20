@@ -64,6 +64,7 @@ def track_embed(title: str, track: wavelink.Playable, *, requester: discord.abc.
 class Music(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
+        self._skip_streak: dict[int, int] = {}
 
     @staticmethod
     def _player(interaction: discord.Interaction) -> wavelink.Player | None:
@@ -244,6 +245,7 @@ class Music(commands.Cog):
         if not player.playing:
             try:
                 await player.play(player.queue.get(), volume=50)
+                self._skip_streak.pop(interaction.guild.id, None)
             except Exception:
                 logger.exception("Failed to start playback in guild %s", interaction.guild.id)
                 player.queue.clear()
@@ -277,19 +279,36 @@ class Music(commands.Cog):
         channel = getattr(player, "channel", None)
         current = getattr(player, "current", None)
         title = current.title if current else "faixa"
+        guild_id = player.guild.id
+        streak = self._skip_streak.get(guild_id, 0) + 1
+        self._skip_streak[guild_id] = streak
         logger.warning("Track exception: %s", getattr(payload, "exception", payload))
         if channel is not None:
             try:
                 if not player.queue.is_empty:
-                    await channel.send(
-                        f"Pulei **{title}** (YouTube bloqueou), seu Macaco! Indo pra próxima..."
-                    )
+                    if streak == 1:
+                        await channel.send(
+                            "Algumas faixas podem ser bloqueadas — vou pulando automaticamente, seu Macaco!"
+                        )
                 else:
+                    self._skip_streak.pop(guild_id, None)
                     await channel.send(
-                        "Não consegui reproduzir essa faixa, seu Macaco! O YouTube recusou o áudio."
+                        f"Não consegui reproduzir **{title}**, seu Macaco! O YouTube recusou o áudio."
                     )
             except Exception:
                 pass
+        if streak >= 20:
+            self._skip_streak.pop(guild_id, None)
+            player.queue.clear()
+            if channel is not None:
+                try:
+                    await channel.send(
+                        "YouTube bloqueou demais faixas seguidas, seu Macaco! Parando a playlist."
+                    )
+                except Exception:
+                    pass
+            await self._leave_if_idle(player)
+            return
         if not player.queue.is_empty:
             try:
                 await player.skip(force=True)
