@@ -19,7 +19,7 @@ spec:
       labels:
         app: lavalink
       annotations:
-        checksum/lavalink-config: "youtube-oauth-refresh-token"
+        checksum/lavalink-config: "youtube-oauth-tv-client"
     spec:
       priorityClassName: pc-6-apps-priority
       containers:

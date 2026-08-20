@@ -134,7 +134,7 @@ class Music(commands.Cog):
         return player
 
     async def _leave_if_idle(self, player: wavelink.Player, *, notify: bool = False) -> None:
-        if player.playing or not player.queue.is_empty():
+        if player.playing or not player.queue.is_empty:
             return
         channel = player.channel
         try:
@@ -260,7 +260,7 @@ class Music(commands.Cog):
                 )
             except Exception:
                 pass
-        if not player.queue.is_empty():
+        if not player.queue.is_empty:
             try:
                 await player.skip(force=True)
             except Exception:
@@ -273,7 +273,7 @@ class Music(commands.Cog):
     @commands.Cog.listener()
     async def on_wavelink_track_end(self, payload: wavelink.TrackEndEventPayload) -> None:
         player = payload.player
-        if player.playing or not player.queue.is_empty():
+        if player.playing or not player.queue.is_empty:
             return
         await self._leave_if_idle(player)
 

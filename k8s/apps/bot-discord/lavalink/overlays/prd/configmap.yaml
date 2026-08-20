@@ -41,16 +41,26 @@ data:
         allowDirectVideoIds: true
         allowDirectPlaylistIds: true
         clients:
-          - MUSIC
           - TV
-          - TVHTML5_SIMPLY
+          - WEBEMBEDDED
           - MWEB
-          - ANDROID_MUSIC
-          - ANDROID_VR
           - WEB
+          - ANDROID_VR
+          - MUSIC
         clientOptions:
+          TV:
+            playlistLoading: false
+            videoLoading: false
+            searching: false
+            playback: true
+          WEBEMBEDDED:
+            playlistLoading: false
+            searching: false
+            playback: true
           MUSIC:
             playback: false
+            playlistLoading: false
+            videoLoading: false
         oauth:
           enabled: true
           refreshToken: ${YOUTUBE_OAUTH_REFRESH_TOKEN}
