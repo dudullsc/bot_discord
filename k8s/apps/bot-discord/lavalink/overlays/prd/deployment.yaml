@@ -19,7 +19,7 @@ spec:
       labels:
         app: lavalink
       annotations:
-        checksum/lavalink-config: "youtube-remote-cipher"
+        checksum/lavalink-config: "youtube-oauth-refresh-token"
     spec:
       priorityClassName: pc-6-apps-priority
       containers:
@@ -34,6 +34,11 @@ spec:
                 secretKeyRef:
                   name: bot-discord-app-config
                   key: LAVALINK_PASSWORD
+            - name: YOUTUBE_OAUTH_REFRESH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: bot-discord-app-config
+                  key: YOUTUBE_OAUTH_REFRESH_TOKEN
           ports:
             - name: http
               containerPort: 2333

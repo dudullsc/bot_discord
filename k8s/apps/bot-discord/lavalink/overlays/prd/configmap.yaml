@@ -53,6 +53,8 @@ data:
             playback: false
         oauth:
           enabled: true
+          refreshToken: ${YOUTUBE_OAUTH_REFRESH_TOKEN}
+          skipInitialization: true
         remoteCipher:
           url: "https://cipher.kikkia.dev/"
           userAgent: "bot-discord"
