@@ -68,19 +68,27 @@ def source_label(track: wavelink.Playable | list[wavelink.Playable] | wavelink.P
 
 
 async def search_play_query(query: str) -> wavelink.Search:
-    """Prefer SoundCloud for text searches; fall back to YouTube. URLs stay as-is."""
+    """Prefer SoundCloud for text searches; mixes stay on SoundCloud only."""
     stripped = query.strip()
     if URL_RE.match(stripped):
         return await wavelink.Playable.search(normalize_play_query(stripped))
 
+    mix = is_mix_query(stripped)
+    sc_query = MIX_QUERY_RE.sub(" ", stripped).strip() if mix else stripped
+    sc_query = re.sub(r"\s+", " ", sc_query).strip() or stripped
+
     try:
-        sc_tracks = await wavelink.Playable.search(f"scsearch:{stripped}")
+        sc_tracks = await wavelink.Playable.search(f"scsearch:{sc_query}")
     except Exception:
-        logger.exception("SoundCloud search failed for %s", stripped)
+        logger.exception("SoundCloud search failed for %s", sc_query)
         sc_tracks = []
 
     if sc_tracks:
         return sc_tracks
+
+    # Mixes: do not fall back to YouTube (too many blocks on datacenter IPs).
+    if mix:
+        return []
 
     return await wavelink.Playable.search(f"ytsearch:{stripped}")
 
@@ -185,6 +193,9 @@ class Music(commands.Cog):
         self._manual_skip_streak: dict[int, int] = {}
         # guild_id -> (channel_id, message_id)
         self._player_panels: dict[int, tuple[int, int]] = {}
+        # Avoid spamming SoundCloud fallback for the same YouTube track.
+        self._fallback_busy: set[int] = set()
+        self._fallback_done: dict[int, set[str]] = {}
 
     @staticmethod
     def _player(interaction: discord.Interaction) -> wavelink.Player | None:
@@ -540,31 +551,9 @@ class Music(commands.Cog):
         *,
         requester_id: int,
     ) -> int:
-        """Queue a YouTube mix playlist when possible, otherwise top search hits."""
+        """Queue top SoundCloud/search hits for a mix request (no YouTube radio lists)."""
         if not tracks:
             return 0
-
-        first = tracks[0]
-        uri = first.uri or ""
-        # YouTube Mix / radio playlists only — SoundCloud uses the search batch below.
-        if "soundcloud.com" not in uri.lower():
-            list_match = YT_LIST_RE.search(uri)
-            if list_match:
-                playlist_url = f"https://www.youtube.com/playlist?list={list_match.group(1)}"
-                try:
-                    playlist = await wavelink.Playable.search(playlist_url)
-                except Exception:
-                    logger.exception("Failed to resolve mix playlist %s", playlist_url)
-                    playlist = None
-                if isinstance(playlist, wavelink.Playlist):
-                    playlist.extras = {"requester_id": requester_id}
-                    try:
-                        added = await player.queue.put_wait(playlist)
-                    except Exception:
-                        logger.exception("Failed to queue mix playlist %s", playlist_url)
-                        added = 0
-                    if added > 0:
-                        return added
 
         batch = list(tracks[:MIX_TRACK_LIMIT])
         for track in batch:
@@ -716,6 +705,8 @@ class Music(commands.Cog):
                 await player.play(player.queue.get(), volume=50)
                 self._skip_streak.pop(interaction.guild.id, None)
                 self._manual_skip_streak.pop(interaction.guild.id, None)
+                self._fallback_done.pop(interaction.guild.id, None)
+                self._fallback_busy.discard(interaction.guild.id)
             except Exception:
                 logger.exception("Failed to start playback in guild %s", interaction.guild.id)
                 player.queue.clear()
@@ -752,6 +743,12 @@ class Music(commands.Cog):
         except Exception:
             return
 
+    @staticmethod
+    def _track_key(track: wavelink.Playable | None) -> str:
+        if track is None:
+            return ""
+        return (getattr(track, "identifier", None) or track.uri or track.title or "").strip()
+
     async def _soundcloud_fallback(
         self,
         player: wavelink.Player,
@@ -775,6 +772,9 @@ class Music(commands.Cog):
             return None
 
         track = results[0]
+        sc_uri = (track.uri or "").lower()
+        if "soundcloud.com" not in sc_uri:
+            return None
         requester_id = track_requester_id(failed)
         if requester_id is not None:
             track.extras = {"requester_id": requester_id}
@@ -789,59 +789,79 @@ class Music(commands.Cog):
         current = getattr(player, "current", None)
         title = current.title if current else "faixa"
         guild_id = player.guild.id
+        track_key = self._track_key(current)
         logger.warning("Track exception: %s", getattr(payload, "exception", payload))
 
-        fallback = await self._soundcloud_fallback(player, current)
-        if fallback is not None:
-            try:
-                await player.play(fallback)
-                self._skip_streak.pop(guild_id, None)
-                if channel is not None:
-                    await channel.send(
-                        f"YouTube bloqueou **{title}**. Tô tocando no SoundCloud: **{fallback.title}**."
-                    )
-                await self.refresh_player_panel(player, channel=channel)
-                return
-            except Exception:
-                logger.exception("SoundCloud fallback play failed")
-
-        streak = self._skip_streak.get(guild_id, 0) + 1
-        self._skip_streak[guild_id] = streak
-        if channel is not None:
-            try:
-                if not player.queue.is_empty:
-                    if streak == 1:
-                        await channel.send(
-                            "Algumas faixas podem ser bloqueadas, então vou pulando automaticamente."
-                        )
-                else:
-                    self._skip_streak.pop(guild_id, None)
-                    await channel.send(
-                        f"Não consegui reproduzir **{title}**. YouTube/SoundCloud falharam."
-                    )
-            except Exception:
-                pass
-        if streak >= 20:
-            self._skip_streak.pop(guild_id, None)
-            player.queue.clear()
-            if channel is not None:
+        if guild_id in self._fallback_busy:
+            return
+        done = self._fallback_done.setdefault(guild_id, set())
+        if track_key and track_key in done:
+            # Already tried fallback for this YouTube item — skip ahead once.
+            if not player.queue.is_empty:
                 try:
-                    await channel.send(
-                        "Bloqueios demais seguidos. Vou parar a playlist."
-                    )
+                    await player.skip(force=True)
                 except Exception:
                     pass
-            await self._leave_if_idle(player)
             return
-        if not player.queue.is_empty:
-            try:
-                await player.skip(force=True)
-            except Exception:
-                logger.exception("Failed to skip broken track in guild %s", player.guild.id)
+
+        self._fallback_busy.add(guild_id)
+        try:
+            fallback = await self._soundcloud_fallback(player, current)
+            if fallback is not None:
+                if track_key:
+                    done.add(track_key)
+                try:
+                    await player.play(fallback)
+                    self._skip_streak.pop(guild_id, None)
+                    if channel is not None:
+                        await channel.send(
+                            f"YouTube bloqueou **{title}**. Tô tocando no SoundCloud: **{fallback.title}**."
+                        )
+                    await self.refresh_player_panel(player, channel=channel)
+                    return
+                except Exception:
+                    logger.exception("SoundCloud fallback play failed")
+
+            streak = self._skip_streak.get(guild_id, 0) + 1
+            self._skip_streak[guild_id] = streak
+            if channel is not None:
+                try:
+                    if not player.queue.is_empty:
+                        if streak == 1:
+                            await channel.send(
+                                "Algumas faixas podem ser bloqueadas, então vou pulando automaticamente."
+                            )
+                    else:
+                        self._skip_streak.pop(guild_id, None)
+                        await channel.send(
+                            f"Não consegui reproduzir **{title}**. YouTube/SoundCloud falharam."
+                        )
+                except Exception:
+                    pass
+            if streak >= 20:
+                self._skip_streak.pop(guild_id, None)
+                done.clear()
                 player.queue.clear()
-                await self._leave_if_idle(player, notify=True)
-            return
-        await self._leave_if_idle(player, notify=True)
+                if channel is not None:
+                    try:
+                        await channel.send(
+                            "Bloqueios demais seguidos. Vou parar a playlist."
+                        )
+                    except Exception:
+                        pass
+                await self._leave_if_idle(player)
+                return
+            if not player.queue.is_empty:
+                try:
+                    await player.skip(force=True)
+                except Exception:
+                    logger.exception("Failed to skip broken track in guild %s", player.guild.id)
+                    player.queue.clear()
+                    await self._leave_if_idle(player, notify=True)
+                return
+            await self._leave_if_idle(player, notify=True)
+        finally:
+            self._fallback_busy.discard(guild_id)
 
     @commands.Cog.listener()
     async def on_wavelink_track_end(self, payload: wavelink.TrackEndEventPayload) -> None:
