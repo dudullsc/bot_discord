@@ -19,7 +19,7 @@ spec:
       labels:
         app: lavalink
       annotations:
-        checksum/lavalink-config: "youtube-playback-all-clients-pot"
+        checksum/lavalink-config: "mix-query-playlist-limit-50"
     spec:
       priorityClassName: pc-6-apps-priority
       containers:

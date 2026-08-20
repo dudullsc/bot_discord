@@ -16,7 +16,9 @@ logger = logging.getLogger("bot")
 
 URL_RE = re.compile(r"https?://", re.IGNORECASE)
 YT_LIST_RE = re.compile(r"[?&]list=([^&]+)", re.IGNORECASE)
+MIX_QUERY_RE = re.compile(r"\bmix\b", re.IGNORECASE)
 EMBED_COLOR = discord.Color.blurple()
+MIX_TRACK_LIMIT = 20
 
 
 def normalize_play_query(query: str) -> str:
@@ -37,6 +39,13 @@ def normalize_play_query(query: str) -> str:
         return f"https://www.youtube.com/playlist?list={playlist_id}"
 
     return stripped
+
+
+def is_mix_query(query: str) -> bool:
+    stripped = query.strip()
+    if URL_RE.match(stripped):
+        return False
+    return bool(MIX_QUERY_RE.search(stripped))
 
 
 def format_ms(ms: int | float | None) -> str:
@@ -146,6 +155,24 @@ class Music(commands.Cog):
             f'Calma aí "{actor}", se quiser outra música digite `/skip` ou clique aqui.'
         )
 
+    def _queue_feedback(
+        self,
+        interaction: discord.Interaction,
+        *,
+        actor: str,
+        player: wavelink.Player,
+        was_playing: bool,
+        idle_content: str,
+    ) -> tuple[str, discord.ui.View | None]:
+        if was_playing:
+            if self._is_current_requester(player, interaction.user):
+                return self._same_requester_queue_message(actor), SkipNowView(self)
+            return (
+                self._wait_for_requester_message(actor, player.current, interaction.guild),
+                None,
+            )
+        return idle_content, None
+
     async def _send(
         self,
         interaction: discord.Interaction,
@@ -244,8 +271,47 @@ class Music(commands.Cog):
             except Exception:
                 pass
 
+    async def _queue_mix_tracks(
+        self,
+        player: wavelink.Player,
+        tracks: list[wavelink.Playable],
+        *,
+        requester_id: int,
+    ) -> int:
+        """Queue a YouTube mix playlist when possible, otherwise top search hits."""
+        if not tracks:
+            return 0
+
+        first = tracks[0]
+        list_match = YT_LIST_RE.search(first.uri or "")
+        if list_match:
+            playlist_url = f"https://www.youtube.com/playlist?list={list_match.group(1)}"
+            try:
+                playlist = await wavelink.Playable.search(playlist_url)
+            except Exception:
+                logger.exception("Failed to resolve mix playlist %s", playlist_url)
+                playlist = None
+            if isinstance(playlist, wavelink.Playlist):
+                playlist.extras = {"requester_id": requester_id}
+                try:
+                    added = await player.queue.put_wait(playlist)
+                except Exception:
+                    logger.exception("Failed to queue mix playlist %s", playlist_url)
+                    added = 0
+                if added > 0:
+                    return added
+
+        batch = list(tracks[:MIX_TRACK_LIMIT])
+        for track in batch:
+            track.extras = {"requester_id": requester_id}
+        try:
+            return await player.queue.put_wait(batch)
+        except Exception:
+            logger.exception("Failed to queue mix batch")
+            return 0
+
     @app_commands.command(name="play", description="Toca música, playlist ou mix do YouTube (link ou nome)")
-    @app_commands.describe(query="Link do YouTube (vídeo ou playlist) ou nome da música")
+    @app_commands.describe(query="Link, nome da música, ou 'mix artista' para várias faixas")
     async def play(self, interaction: discord.Interaction, query: str) -> None:
         await interaction.response.defer()
         player = await self._require_player(interaction, connect=True)
@@ -298,15 +364,13 @@ class Music(commands.Cog):
                 color=EMBED_COLOR,
             )
             if was_playing:
-                same_person = self._is_current_requester(player, interaction.user)
-                if same_person:
-                    content = self._same_requester_queue_message(actor)
-                    view: discord.ui.View | None = SkipNowView(self)
-                else:
-                    content = self._wait_for_requester_message(
-                        actor, player.current, interaction.guild
-                    )
-                    view = None
+                content, view = self._queue_feedback(
+                    interaction,
+                    actor=actor,
+                    player=player,
+                    was_playing=True,
+                    idle_content="",
+                )
                 await interaction.followup.send(content=content, embed=embed, view=view)
             else:
                 content = (
@@ -315,40 +379,72 @@ class Music(commands.Cog):
                 )
                 await interaction.followup.send(content=content, embed=embed)
         else:
-            track = tracks[0]
-            track.extras = {"requester_id": interaction.user.id}
-            try:
-                await player.queue.put_wait(track)
-            except Exception:
-                logger.exception("Failed to queue track from %s", search_query)
-                await interaction.followup.send(
-                    "Não consegui enfileirar essa faixa. Tente outro link."
+            mix_mode = is_mix_query(query)
+            if mix_mode:
+                added = await self._queue_mix_tracks(
+                    player,
+                    tracks,
+                    requester_id=interaction.user.id,
                 )
-                await self._leave_if_idle(player, notify=True)
-                return
-            if was_playing:
-                same_person = self._is_current_requester(player, interaction.user)
-                if same_person:
-                    content = self._same_requester_queue_message(actor)
-                    view: discord.ui.View | None = SkipNowView(self)
-                else:
-                    content = self._wait_for_requester_message(
-                        actor, player.current, interaction.guild
+                if added <= 0:
+                    await interaction.followup.send(
+                        "Não consegui montar esse mix. Tenta de novo ou cola um link."
                     )
-                    view = None
-                await interaction.followup.send(
-                    content=content,
-                    embed=track_embed("Adicionado à fila", track, requester=interaction.user),
-                    view=view,
-                )
-            else:
-                await interaction.followup.send(
-                    content=(
-                        f'Olha só o "{actor}" pediu uma música que coisa mais linda, '
-                        "esperamos que não seja uma música de gay."
+                    await self._leave_if_idle(player, notify=True)
+                    return
+                embed = discord.Embed(
+                    title="Mix adicionado",
+                    description=(
+                        f"Busca: `{query.strip()}`\n"
+                        f"Enfileirei `{added}` faixa(s) relacionadas.\n"
+                        "Se alguma falhar, eu pulo e sigo o mix."
                     ),
-                    embed=track_embed("Tocando agora", track, requester=interaction.user),
+                    color=EMBED_COLOR,
                 )
+                content, view = self._queue_feedback(
+                    interaction,
+                    actor=actor,
+                    player=player,
+                    was_playing=was_playing,
+                    idle_content=(
+                        f'Olha só o "{actor}" pediu um mix que coisa mais linda, '
+                        "vamos ver se aguenta a playlist toda."
+                    ),
+                )
+                await interaction.followup.send(content=content, embed=embed, view=view)
+            else:
+                track = tracks[0]
+                track.extras = {"requester_id": interaction.user.id}
+                try:
+                    await player.queue.put_wait(track)
+                except Exception:
+                    logger.exception("Failed to queue track from %s", search_query)
+                    await interaction.followup.send(
+                        "Não consegui enfileirar essa faixa. Tente outro link."
+                    )
+                    await self._leave_if_idle(player, notify=True)
+                    return
+                if was_playing:
+                    content, view = self._queue_feedback(
+                        interaction,
+                        actor=actor,
+                        player=player,
+                        was_playing=True,
+                        idle_content="",
+                    )
+                    await interaction.followup.send(
+                        content=content,
+                        embed=track_embed("Adicionado à fila", track, requester=interaction.user),
+                        view=view,
+                    )
+                else:
+                    await interaction.followup.send(
+                        content=(
+                            f'Olha só o "{actor}" pediu uma música que coisa mais linda, '
+                            "esperamos que não seja uma música de gay."
+                        ),
+                        embed=track_embed("Tocando agora", track, requester=interaction.user),
+                    )
 
         if not player.playing:
             try:
