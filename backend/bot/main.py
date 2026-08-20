@@ -27,6 +27,7 @@ class MusicBot(commands.Bot):
         intents.voice_states = True
         super().__init__(command_prefix="!", intents=intents)
         self._lavalink_ready = False
+        self._guild_commands_synced = False
 
     async def setup_hook(self) -> None:
         await asyncio.to_thread(db.ensure_schema)
@@ -72,6 +73,12 @@ class MusicBot(commands.Bot):
     async def on_ready(self) -> None:
         assert self.user is not None
         logger.info("Logged in as %s (%s)", self.user, self.user.id)
+
+        if not self._guild_commands_synced:
+            self._guild_commands_synced = True
+            for guild in self.guilds:
+                await self._sync_commands(guild)
+
         await self._persist_presence(initial=True)
         if not self.heartbeat_loop.is_running():
             self.heartbeat_loop.start()
