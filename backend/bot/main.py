@@ -26,6 +26,7 @@ class MusicBot(commands.Bot):
         intents.guilds = True
         intents.voice_states = True
         super().__init__(command_prefix="!", intents=intents)
+        self._lavalink_ready = False
 
     async def setup_hook(self) -> None:
         await asyncio.to_thread(db.ensure_schema)
@@ -138,6 +139,19 @@ class MusicBot(commands.Bot):
 
     async def on_wavelink_node_ready(self, payload: wavelink.NodeReadyEventPayload) -> None:
         logger.info("Lavalink node ready: %r | resumed=%s", payload.node, payload.resumed)
+        if self._lavalink_ready and not payload.resumed:
+            logger.warning("Lavalink reiniciou — limpando conexões de voz antigas")
+            for guild in self.guilds:
+                player = guild.voice_client
+                if isinstance(player, wavelink.Player):
+                    try:
+                        await player.disconnect(force=True)
+                    except Exception:
+                        logger.exception(
+                            "Failed to disconnect stale player in guild %s",
+                            guild.id,
+                        )
+        self._lavalink_ready = True
 
     async def _persist_presence(self, *, initial: bool) -> None:
         if self.user is None:

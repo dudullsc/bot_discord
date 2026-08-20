@@ -10,6 +10,7 @@ import discord
 import wavelink
 from discord import app_commands
 from discord.ext import commands
+from wavelink.exceptions import ChannelTimeoutException
 
 logger = logging.getLogger("bot")
 
@@ -85,6 +86,23 @@ class Music(commands.Cog):
                 return None
             try:
                 player = await channel.connect(cls=wavelink.Player, self_deaf=True, timeout=45)
+            except ChannelTimeoutException:
+                logger.exception(
+                    "Voice connect timed out in guild %s channel %s",
+                    interaction.guild.id,
+                    channel.id,
+                )
+                stale = self._player(interaction)
+                if stale is not None:
+                    try:
+                        await stale.disconnect(force=True)
+                    except Exception:
+                        pass
+                await self._send(
+                    interaction,
+                    "Não consegui entrar na voz a tempo, seu Macaco! O Lavalink pode ter reiniciado — tenta de novo em uns segundos.",
+                )
+                return None
             except discord.ClientException:
                 logger.exception("Voice ClientException in guild %s channel %s", interaction.guild.id, channel.id)
                 await self._send(interaction, "Não consegui entrar na voz, seu Macaco!")
