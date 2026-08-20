@@ -61,6 +61,45 @@ def track_embed(title: str, track: wavelink.Playable, *, requester: discord.abc.
     return embed
 
 
+def track_requester_id(track: wavelink.Playable | None) -> int | None:
+    if track is None:
+        return None
+    extras = getattr(track, "extras", None)
+    if extras is None:
+        return None
+    try:
+        value = dict(extras).get("requester_id")
+    except Exception:
+        value = getattr(extras, "requester_id", None)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.isdigit():
+        return int(value)
+    return None
+
+
+class SkipNowView(discord.ui.View):
+    def __init__(self, cog: Music) -> None:
+        super().__init__(timeout=180)
+        self.cog = cog
+
+    @discord.ui.button(label="Pular agora", style=discord.ButtonStyle.danger)
+    async def skip_now(
+        self,
+        interaction: discord.Interaction,
+        button: discord.ui.Button,
+    ) -> None:
+        skipped = await self.cog.handle_skip(interaction)
+        if not skipped:
+            return
+        for child in self.children:
+            child.disabled = True
+        try:
+            await interaction.message.edit(view=self)  # type: ignore[union-attr]
+        except Exception:
+            pass
+
+
 class Music(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
@@ -81,23 +120,31 @@ class Music(commands.Cog):
 
     @staticmethod
     def _requester_name(track: wavelink.Playable | None, guild: discord.Guild | None) -> str:
-        if track is None or guild is None:
+        requester_id = track_requester_id(track)
+        if requester_id is None or guild is None:
             return "quem pediu antes"
-
-        extras = getattr(track, "extras", None)
-        requester_id = None
-        if extras is not None:
-            try:
-                requester_id = dict(extras).get("requester_id")
-            except Exception:
-                requester_id = getattr(extras, "requester_id", None)
-
-        if isinstance(requester_id, int):
-            member = guild.get_member(requester_id)
-            if member is not None:
-                return member.display_name
-
+        member = guild.get_member(requester_id)
+        if member is not None:
+            return member.display_name
         return "quem pediu antes"
+
+    def _is_current_requester(self, player: wavelink.Player, user: discord.abc.User) -> bool:
+        requester_id = track_requester_id(player.current)
+        if requester_id is None:
+            return True
+        return requester_id == user.id
+
+    def _wait_for_requester_message(self, actor: str, track: wavelink.Playable | None, guild: discord.Guild | None) -> str:
+        first_requester = self._requester_name(track, guild)
+        return (
+            f'Opa "{actor}" espera acabar a playlist mais podre do "{first_requester}" '
+            "assim que acabar a sua vai tocar!"
+        )
+
+    def _same_requester_queue_message(self, actor: str) -> str:
+        return (
+            f'Calma aí "{actor}", se quiser outra música digite `/skip` ou clique aqui.'
+        )
 
     async def _send(
         self,
@@ -251,17 +298,22 @@ class Music(commands.Cog):
                 color=EMBED_COLOR,
             )
             if was_playing:
-                first_requester = self._requester_name(player.current, interaction.guild)
-                content = (
-                    f'Opa "{actor}" espera acabar a playlist mais podre do "{first_requester}" '
-                    "assim que acabar a sua vai tocar!"
-                )
+                same_person = self._is_current_requester(player, interaction.user)
+                if same_person:
+                    content = self._same_requester_queue_message(actor)
+                    view: discord.ui.View | None = SkipNowView(self)
+                else:
+                    content = self._wait_for_requester_message(
+                        actor, player.current, interaction.guild
+                    )
+                    view = None
+                await interaction.followup.send(content=content, embed=embed, view=view)
             else:
                 content = (
                     f'Olha só o "{actor}" pediu uma playlist que coisa mais linda, '
                     "esperamos que não seja uma playlist de gay."
                 )
-            await interaction.followup.send(content=content, embed=embed)
+                await interaction.followup.send(content=content, embed=embed)
         else:
             track = tracks[0]
             track.extras = {"requester_id": interaction.user.id}
@@ -275,13 +327,19 @@ class Music(commands.Cog):
                 await self._leave_if_idle(player, notify=True)
                 return
             if was_playing:
-                first_requester = self._requester_name(player.current, interaction.guild)
+                same_person = self._is_current_requester(player, interaction.user)
+                if same_person:
+                    content = self._same_requester_queue_message(actor)
+                    view: discord.ui.View | None = SkipNowView(self)
+                else:
+                    content = self._wait_for_requester_message(
+                        actor, player.current, interaction.guild
+                    )
+                    view = None
                 await interaction.followup.send(
-                    content=(
-                        f'Opa "{actor}" espera acabar a playlist mais podre do "{first_requester}" '
-                        "assim que acabar a sua vai tocar!"
-                    ),
+                    content=content,
                     embed=track_embed("Adicionado à fila", track, requester=interaction.user),
+                    view=view,
                 )
             else:
                 await interaction.followup.send(
@@ -401,17 +459,29 @@ class Music(commands.Cog):
 
     @app_commands.command(name="skip", description="Pula a faixa atual")
     async def skip(self, interaction: discord.Interaction) -> None:
+        await self.handle_skip(interaction)
+
+    async def handle_skip(self, interaction: discord.Interaction) -> bool:
         player = await self._require_player(interaction)
         if player is None:
-            return
+            return False
         if not player.playing:
-            await interaction.response.send_message("Nada tocando para pular.", ephemeral=True)
-            return
+            await self._send(interaction, "Nada tocando para pular.")
+            return False
+
+        actor = self._display_name(interaction.user)
+        if not self._is_current_requester(player, interaction.user):
+            await self._send(
+                interaction,
+                self._wait_for_requester_message(actor, player.current, interaction.guild),
+                ephemeral=False,
+            )
+            return False
+
         await player.skip(force=True)
         guild_id = interaction.guild.id if interaction.guild else 0
         streak = self._manual_skip_streak.get(guild_id, 0) + 1
         self._manual_skip_streak[guild_id] = streak
-        actor = self._display_name(interaction.user)
         if streak == 1:
             message = f'Pow "{actor}" deixa a música tocar esta tão boa.....'
         elif streak == 2:
@@ -421,7 +491,8 @@ class Music(commands.Cog):
             )
         else:
             message = "Desisto, pula essa merda aí mesmo, é ruim pra caralho!"
-        await interaction.response.send_message(message)
+        await self._send(interaction, message, ephemeral=False)
+        return True
 
     @app_commands.command(name="stop", description="Para a música e limpa a fila")
     async def stop(self, interaction: discord.Interaction) -> None:
