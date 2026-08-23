@@ -6,6 +6,8 @@ lavalink:
   plugins:
     - dependency: "dev.lavalink.youtube:youtube-plugin:1.18.2"
       snapshot: false
+    - dependency: "com.github.topi314.lavasrc:lavasrc-plugin:4.8.3"
+      snapshot: false
   server:
     password: "youshallnotpass"
     sources:
@@ -75,6 +77,17 @@ plugins:
     remoteCipher:
       url: "https://cipher.kikkia.dev/"
       userAgent: "bot-discord"
+  lavasrc:
+    sources:
+      deezer: true
+      spotify: false
+      applemusic: false
+      youtube: false
+    deezer:
+      # Chave pública exigida pelo plugin para descriptografar streams do Deezer.
+      masterDecryptionKey: "e6ea6907039a8a0a2c5cae8e96fc6450"
+      arl: "${DEEZER_ARL}"
+      formats: ["MP3_128", "MP3_64"]
 
 logging:
   level:

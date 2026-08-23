@@ -22,6 +22,8 @@ services:
     image: ghcr.io/lavalink-devs/lavalink:4-alpine
     container_name: lavalink
     restart: unless-stopped
+    env_file:
+      - ../.env
     environment:
       - _JAVA_OPTIONS=-Xmx1G
     volumes:

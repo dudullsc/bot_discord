@@ -133,6 +133,7 @@ Mesmo modelo do `controle_contas`: manifests neste repo + Applications Argo no [
 
 - Painel: `https://bot-discord.kingbr.com.br`
 - Imagens: `ghcr.io/dudullsc/bot-discord-bot` e `bot-discord-web` (CI em `.github/workflows/build-images.yml`)
+- Deploy automático de imagem: Argo CD Image Updater (em `kingnet-k8s`) observa o digest de `:latest` e atualiza `bot-discord-bot` / `bot-discord-web`
 
 Checklist pós-merge:
 1. DNS `bot-discord.kingbr.com.br` → `192.168.3.11`
