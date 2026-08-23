@@ -36,15 +36,27 @@ def track_source_domain(track: wavelink.Playable | None) -> str:
     return ""
 
 
+SEARCH_SOURCES: dict[str, str] = {
+    "dzsearch": "deezer.com",
+    "scsearch": "soundcloud.com",
+}
+
+
 async def search_source_tracks(prefix: str, query: str) -> list[wavelink.Playable]:
+    source = prefix if prefix.endswith(":") else f"{prefix}:"
     try:
-        results = await wavelink.Playable.search(f"{prefix}:{query}")
+        results = await wavelink.Playable.search(query, source=source)
     except Exception:
         logger.exception("%s search failed for %s", prefix, query)
         return []
     if not results or isinstance(results, wavelink.Playlist):
         return []
-    return list(results)
+
+    expected_domain = SEARCH_SOURCES.get(prefix.rstrip(":"), "")
+    tracks = list(results)
+    if expected_domain:
+        tracks = [track for track in tracks if expected_domain in (track.uri or "").lower()]
+    return tracks
 
 
 def normalize_play_query(query: str) -> str:
@@ -113,7 +125,7 @@ async def search_play_query(query: str) -> wavelink.Search:
     if mix:
         return []
 
-    return await wavelink.Playable.search(f"ytsearch:{stripped}")
+    return await wavelink.Playable.search(stripped, source="ytsearch:")
 
 
 def format_ms(ms: int | float | None) -> str:
@@ -786,14 +798,14 @@ class Music(commands.Cog):
 
         failed_domain = track_source_domain(failed)
         fallbacks: tuple[tuple[str, str], ...] = (
-            ("dzsearch", "deezer.com"),
-            ("scsearch", "soundcloud.com"),
+            ("dzsearch:", "deezer.com"),
+            ("scsearch:", "soundcloud.com"),
         )
 
-        for prefix, domain in fallbacks:
+        for source, domain in fallbacks:
             if failed_domain == domain:
                 continue
-            tracks = await search_source_tracks(prefix, query)
+            tracks = await search_source_tracks(source.rstrip(":"), query)
             if not tracks:
                 continue
             track = tracks[0]
