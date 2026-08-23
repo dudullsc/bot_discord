@@ -19,7 +19,7 @@ spec:
       labels:
         app: lavalink
       annotations:
-        checksum/lavalink-config: "lavasrc-deezer-v2-spring-env"
+        checksum/lavalink-config: "lavasrc-deezer-v3-yaml-arl"
     spec:
       priorityClassName: pc-6-apps-priority
       containers:
