@@ -19,7 +19,7 @@ spec:
       labels:
         app: lavalink
       annotations:
-        checksum/lavalink-config: "lavasrc-deezer-v1"
+        checksum/lavalink-config: "lavasrc-deezer-v2-spring-env"
     spec:
       priorityClassName: pc-6-apps-priority
       containers:
@@ -40,6 +40,11 @@ spec:
                   name: bot-discord-app-config
                   key: YOUTUBE_OAUTH_REFRESH_TOKEN
             - name: DEEZER_ARL
+              valueFrom:
+                secretKeyRef:
+                  name: bot-discord-app-config
+                  key: DEEZER_ARL
+            - name: PLUGINS_LAVASRC_DEEZER_ARL
               valueFrom:
                 secretKeyRef:
                   name: bot-discord-app-config

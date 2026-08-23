@@ -84,9 +84,7 @@ plugins:
       applemusic: false
       youtube: false
     deezer:
-      # Chave pública exigida pelo plugin para descriptografar streams do Deezer.
-      masterDecryptionKey: "e6ea6907039a8a0a2c5cae8e96fc6450"
-      arl: "${DEEZER_ARL}"
+      masterDecryptionKey: "g4e5716d-0d58-48bb-ac21-997856d4a417"
       formats: ["MP3_128", "MP3_64"]
 
 logging:
