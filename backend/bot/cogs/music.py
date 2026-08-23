@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from typing import cast
@@ -178,7 +179,8 @@ class SkipNowView(discord.ui.View):
         interaction: discord.Interaction,
         button: discord.ui.Button,
     ) -> None:
-        skipped = await self.cog.handle_skip(interaction)
+        await self.cog._defer(interaction, ephemeral=False)
+        skipped = await self.cog.handle_skip(interaction, deferred=True)
         if not skipped:
             return
         for child in self.children:
@@ -302,6 +304,15 @@ class Music(commands.Cog):
         else:
             await interaction.response.send_message(content, ephemeral=ephemeral)
 
+    async def _defer(
+        self,
+        interaction: discord.Interaction,
+        *,
+        ephemeral: bool = True,
+    ) -> None:
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=ephemeral)
+
     async def _followup(
         self,
         interaction: discord.Interaction,
@@ -341,34 +352,50 @@ class Music(commands.Cog):
             if not connect:
                 await self._send(interaction, "Nada tocando no momento.")
                 return None
-            try:
-                player = await channel.connect(cls=wavelink.Player, self_deaf=True, timeout=45)
-            except ChannelTimeoutException:
+            last_error: Exception | None = None
+            for attempt in range(2):
+                try:
+                    player = await channel.connect(cls=wavelink.Player, self_deaf=True, timeout=45)
+                    break
+                except ChannelTimeoutException as exc:
+                    last_error = exc
+                    logger.warning(
+                        "Voice connect timed out in guild %s channel %s (attempt %s/2)",
+                        interaction.guild.id,
+                        channel.id,
+                        attempt + 1,
+                    )
+                    stale = self._player(interaction)
+                    if stale is not None:
+                        try:
+                            await stale.disconnect(force=True)
+                        except Exception:
+                            pass
+                    if attempt == 0:
+                        await asyncio.sleep(2)
+                        continue
+                except discord.ClientException as exc:
+                    last_error = exc
+                    logger.exception("Voice ClientException in guild %s channel %s", interaction.guild.id, channel.id)
+                    await self._send(interaction, "Não consegui entrar na voz.")
+                    return None
+                except Exception as exc:
+                    last_error = exc
+                    logger.exception("Voice connect failed in guild %s channel %s", interaction.guild.id, channel.id)
+                    await self._send(
+                        interaction,
+                        "Não consegui entrar na voz. Confere se o Lavalink está ativo e se eu tenho permissão de Conectar e Falar nesse canal.",
+                    )
+                    return None
+            else:
                 logger.exception(
-                    "Voice connect timed out in guild %s channel %s",
+                    "Voice connect timed out in guild %s channel %s after retries",
                     interaction.guild.id,
                     channel.id,
                 )
-                stale = self._player(interaction)
-                if stale is not None:
-                    try:
-                        await stale.disconnect(force=True)
-                    except Exception:
-                        pass
                 await self._send(
                     interaction,
-                    "Não consegui entrar na voz a tempo. O Lavalink pode ter reiniciado, então tente de novo em alguns segundos.",
-                )
-                return None
-            except discord.ClientException:
-                logger.exception("Voice ClientException in guild %s channel %s", interaction.guild.id, channel.id)
-                await self._send(interaction, "Não consegui entrar na voz.")
-                return None
-            except Exception:
-                logger.exception("Voice connect failed in guild %s channel %s", interaction.guild.id, channel.id)
-                await self._send(
-                    interaction,
-                    "Não consegui entrar na voz. Confere se o Lavalink está ativo e se eu tenho permissão de Conectar e Falar nesse canal.",
+                    "Não consegui entrar na voz a tempo. O Lavalink pode ter reiniciado — tente de novo em alguns segundos.",
                 )
                 return None
             player.autoplay = wavelink.AutoPlayMode.partial
@@ -494,6 +521,7 @@ class Music(commands.Cog):
         self._player_panels[guild.id] = (sent.channel.id, sent.id)
 
     async def panel_previous(self, interaction: discord.Interaction) -> None:
+        await self._defer(interaction)
         player = await self._require_player(interaction)
         if player is None:
             return
@@ -521,13 +549,11 @@ class Music(commands.Cog):
             await self._send(interaction, "Não consegui tocar a faixa anterior.")
             return
 
-        if interaction.response.is_done():
-            await interaction.followup.send("Voltei a faixa anterior.", ephemeral=True)
-        else:
-            await interaction.response.send_message("Voltei a faixa anterior.", ephemeral=True)
+        await self._send(interaction, "Voltei a faixa anterior.")
         await self.refresh_player_panel(player, channel=interaction.channel)
 
     async def panel_pause_toggle(self, interaction: discord.Interaction) -> None:
+        await self._defer(interaction)
         player = await self._require_player(interaction)
         if player is None:
             return
@@ -536,20 +562,19 @@ class Music(commands.Cog):
             return
         await player.pause(not player.paused)
         label = "Pausado." if player.paused else "Continuando."
-        if interaction.response.is_done():
-            await interaction.followup.send(label, ephemeral=True)
-        else:
-            await interaction.response.send_message(label, ephemeral=True)
+        await self._send(interaction, label)
         await self.refresh_player_panel(player, channel=interaction.channel)
 
     async def panel_skip(self, interaction: discord.Interaction) -> None:
-        skipped = await self.handle_skip(interaction)
+        await self._defer(interaction, ephemeral=False)
+        skipped = await self.handle_skip(interaction, deferred=True)
         if skipped and interaction.guild is not None:
             player = self._player(interaction)
             if player is not None:
                 await self.refresh_player_panel(player, channel=interaction.channel)
 
     async def panel_stop(self, interaction: discord.Interaction) -> None:
+        await self._defer(interaction)
         player = await self._require_player(interaction)
         if player is None:
             return
@@ -557,13 +582,11 @@ class Music(commands.Cog):
         await player.stop()
         if interaction.guild is not None:
             self._manual_skip_streak.pop(interaction.guild.id, None)
-        if interaction.response.is_done():
-            await interaction.followup.send("Parado e fila limpa.", ephemeral=True)
-        else:
-            await interaction.response.send_message("Parado e fila limpa.", ephemeral=True)
+        await self._send(interaction, "Parado e fila limpa.")
         await self.refresh_player_panel(player, channel=interaction.channel, disabled=True)
 
     async def panel_leave(self, interaction: discord.Interaction) -> None:
+        await self._defer(interaction)
         player = await self._require_player(interaction)
         if player is None:
             return
@@ -574,10 +597,7 @@ class Music(commands.Cog):
         if guild_id is not None:
             self._manual_skip_streak.pop(guild_id, None)
             self._player_panels.pop(guild_id, None)
-        if interaction.response.is_done():
-            await interaction.followup.send("Saí da voz.", ephemeral=True)
-        else:
-            await interaction.response.send_message("Saí da voz.", ephemeral=True)
+        await self._send(interaction, "Saí da voz.")
 
     async def _queue_mix_tracks(
         self,
@@ -916,33 +936,38 @@ class Music(commands.Cog):
 
     @app_commands.command(name="pause", description="Pausa a música atual")
     async def pause(self, interaction: discord.Interaction) -> None:
+        await self._defer(interaction, ephemeral=True)
         player = await self._require_player(interaction)
         if player is None:
             return
         if player.paused:
-            await interaction.response.send_message("Já está pausado.", ephemeral=True)
+            await self._send(interaction, "Já está pausado.")
             return
         await player.pause(True)
-        await interaction.response.send_message("Pausado.")
+        await self._send(interaction, "Pausado.")
         await self.refresh_player_panel(player, channel=interaction.channel)
 
     @app_commands.command(name="resume", description="Continua a música pausada")
     async def resume(self, interaction: discord.Interaction) -> None:
+        await self._defer(interaction, ephemeral=True)
         player = await self._require_player(interaction)
         if player is None:
             return
         if not player.paused:
-            await interaction.response.send_message("Não está pausado.", ephemeral=True)
+            await self._send(interaction, "Não está pausado.")
             return
         await player.pause(False)
-        await interaction.response.send_message("Continuando.")
+        await self._send(interaction, "Continuando.")
         await self.refresh_player_panel(player, channel=interaction.channel)
 
     @app_commands.command(name="skip", description="Pula a faixa atual")
     async def skip(self, interaction: discord.Interaction) -> None:
-        await self.handle_skip(interaction)
+        await self._defer(interaction, ephemeral=False)
+        await self.handle_skip(interaction, deferred=True)
 
-    async def handle_skip(self, interaction: discord.Interaction) -> bool:
+    async def handle_skip(self, interaction: discord.Interaction, *, deferred: bool = False) -> bool:
+        if not deferred:
+            await self._defer(interaction, ephemeral=False)
         player = await self._require_player(interaction)
         if player is None:
             return False
@@ -977,6 +1002,7 @@ class Music(commands.Cog):
 
     @app_commands.command(name="stop", description="Para a música e limpa a fila")
     async def stop(self, interaction: discord.Interaction) -> None:
+        await self._defer(interaction, ephemeral=True)
         player = await self._require_player(interaction)
         if player is None:
             return
@@ -984,7 +1010,7 @@ class Music(commands.Cog):
         await player.stop()
         if interaction.guild is not None:
             self._manual_skip_streak.pop(interaction.guild.id, None)
-        await interaction.response.send_message("Parado e fila limpa.")
+        await self._send(interaction, "Parado e fila limpa.")
         await self.refresh_player_panel(player, channel=interaction.channel, disabled=True)
 
     @app_commands.command(name="queue", description="Mostra a fila de músicas")
@@ -1069,6 +1095,7 @@ class Music(commands.Cog):
 
     @app_commands.command(name="leave", description="Sai do canal de voz")
     async def leave(self, interaction: discord.Interaction) -> None:
+        await self._defer(interaction, ephemeral=True)
         player = await self._require_player(interaction)
         if player is None:
             return
@@ -1077,7 +1104,7 @@ class Music(commands.Cog):
         if interaction.guild is not None:
             self._manual_skip_streak.pop(interaction.guild.id, None)
             self._player_panels.pop(interaction.guild.id, None)
-        await interaction.response.send_message("Saí da voz.")
+        await self._send(interaction, "Saí da voz.")
 
 
 async def setup(bot: commands.Bot) -> None:
