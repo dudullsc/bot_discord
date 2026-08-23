@@ -857,7 +857,7 @@ class Music(commands.Cog):
             # Already tried fallback for this item — skip ahead once.
             if not player.queue.is_empty:
                 try:
-                    await player.skip(force=True)
+                    await self._skip_to_next(player)
                 except Exception:
                     pass
             return
@@ -911,7 +911,7 @@ class Music(commands.Cog):
                 return
             if not player.queue.is_empty:
                 try:
-                    await player.skip(force=True)
+                    await self._skip_to_next(player)
                 except Exception:
                     logger.exception("Failed to skip broken track in guild %s", player.guild.id)
                     player.queue.clear()
@@ -984,7 +984,13 @@ class Music(commands.Cog):
             )
             return False
 
-        await player.skip(force=True)
+        try:
+            await self._skip_to_next(player)
+        except Exception:
+            logger.exception("Failed to skip track in guild %s", interaction.guild.id if interaction.guild else 0)
+            await self._send(interaction, "Não consegui pular essa faixa.")
+            return False
+
         guild_id = interaction.guild.id if interaction.guild else 0
         streak = self._manual_skip_streak.get(guild_id, 0) + 1
         self._manual_skip_streak[guild_id] = streak
@@ -999,6 +1005,17 @@ class Music(commands.Cog):
             message = "Desisto, pula essa merda aí mesmo, é ruim pra caralho!"
         await self._send(interaction, message, ephemeral=False)
         return True
+
+    async def _skip_to_next(self, player: wavelink.Player) -> None:
+        """Advance to the next queued track.
+
+        Wavelink AutoPlay ignores TrackEnd reason ``replaced``, which is what
+        ``Player.skip()`` emits — so skip alone never starts the next mix/queue item.
+        """
+        if not player.queue.is_empty:
+            await player.play(player.queue.get())
+            return
+        await player.skip(force=True)
 
     @app_commands.command(name="stop", description="Para a música e limpa a fila")
     async def stop(self, interaction: discord.Interaction) -> None:
