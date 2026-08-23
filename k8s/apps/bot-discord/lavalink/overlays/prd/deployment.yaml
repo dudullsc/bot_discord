@@ -6,7 +6,7 @@ metadata:
   labels:
     app: lavalink
   annotations:
-    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/sync-wave: "2"
 spec:
   replicas: 1
   strategy:
@@ -19,7 +19,7 @@ spec:
       labels:
         app: lavalink
       annotations:
-        checksum/lavalink-config: "lavasrc-deezer-v3-yaml-arl"
+        checksum/lavalink-config: "lavasrc-deezer-v5-dedicated-secret"
     spec:
       priorityClassName: pc-6-apps-priority
       containers:
@@ -42,12 +42,12 @@ spec:
             - name: DEEZER_ARL
               valueFrom:
                 secretKeyRef:
-                  name: bot-discord-app-config
+                  name: lavalink-deezer-config
                   key: DEEZER_ARL
             - name: PLUGINS_LAVASRC_DEEZER_ARL
               valueFrom:
                 secretKeyRef:
-                  name: bot-discord-app-config
+                  name: lavalink-deezer-config
                   key: DEEZER_ARL
           ports:
             - name: http
