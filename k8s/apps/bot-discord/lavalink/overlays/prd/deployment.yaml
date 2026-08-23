@@ -19,7 +19,7 @@ spec:
       labels:
         app: lavalink
       annotations:
-        checksum/lavalink-config: "lavasrc-deezer-v5-dedicated-secret"
+        checksum/lavalink-config: "lavasrc-deezer-v6-master-key-secret"
     spec:
       priorityClassName: pc-6-apps-priority
       containers:
@@ -49,6 +49,16 @@ spec:
                 secretKeyRef:
                   name: lavalink-deezer-config
                   key: DEEZER_ARL
+            - name: DEEZER_MASTER_DECRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: lavalink-deezer-config
+                  key: DEEZER_MASTER_DECRYPTION_KEY
+            - name: PLUGINS_LAVASRC_DEEZER_MASTERDECRYPTIONKEY
+              valueFrom:
+                secretKeyRef:
+                  name: lavalink-deezer-config
+                  key: DEEZER_MASTER_DECRYPTION_KEY
           ports:
             - name: http
               containerPort: 2333
